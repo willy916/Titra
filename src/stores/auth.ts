@@ -241,6 +241,36 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function getAllRoles() {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/user/get/all-role-actors')
+      return response.data
+    } catch (error) {
+      console.error('Get all roles error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function setAnyRole(roleName: string) {
+    isLoading.value = true
+    try {
+      const response = await api.post('/api/user/set-role/any', { roleName })
+      if (user.value) {
+        user.value.role = roleName as UserRole
+        localStorage.setItem('user', JSON.stringify(user.value))
+      }
+      return response.data
+    } catch (error) {
+      console.error('Set role error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   function updateProfile(updates: Partial<User>) {
     if (user.value) {
       user.value = { ...user.value, ...updates }
@@ -267,5 +297,7 @@ export const useAuthStore = defineStore('auth', () => {
     skipOnboarding,
     logout,
     updateProfile,
+    getAllRoles,
+    setAnyRole,
   }
 })

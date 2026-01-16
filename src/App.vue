@@ -145,9 +145,9 @@ function handleNavigate(screen: string, data?: any) {
   isMobileSidebarOpen.value = false
 }
 
-function handleAddToCart(product: any, quantity: number) {
-  cartStore.addItem(product, quantity)
-  toast.success(`${quantity} x ${product.name} ajouté au panier`)
+function handleAddToCart(product: any) {
+  cartStore.addToCart(product)
+  toast.success('Produit ajouté au panier')
 }
 
 function handleLogout() {

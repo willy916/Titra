@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { cn } from '@/utils'
 
 interface Props {
-  class?: string
+  class?: any
 }
 
 const props = defineProps<Props>()

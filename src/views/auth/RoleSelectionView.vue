@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { 
   Wheat, 
   Cog, 
@@ -12,6 +12,8 @@ import {
   Globe, 
   GraduationCap 
 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
@@ -28,7 +30,23 @@ const emit = defineEmits<{
   'select-role': [role: UserRole]
 }>()
 
+const authStore = useAuthStore()
 const selectedRole = ref<UserRole | null>(null)
+const availableRoleNames = ref<string[]>([])
+
+onMounted(async () => {
+  try {
+    const rolesData = await authStore.getAllRoles()
+    // On extrait uniquement les noms des rôles depuis le tableau d'objets renvoyé par l'API
+    const rawRoles = rolesData.body || rolesData
+    if (Array.isArray(rawRoles)) {
+      availableRoleNames.value = rawRoles.map((r: any) => r.name)
+    }
+    console.log('Rôles disponibles du backend:', availableRoleNames.value)
+  } catch (error) {
+    toast.error('Erreur lors de la récupération des rôles')
+  }
+})
 
 const roles: Role[] = [
   // Individual Roles
@@ -113,17 +131,39 @@ const roles: Role[] = [
   },
 ]
 
-const individualRoles = computed(() => roles.filter(r => r.category === 'individual'))
-const independentRoles = computed(() => roles.filter(r => r.category === 'independent'))
-const institutionalRoles = computed(() => roles.filter(r => r.category === 'institution'))
+// Filter roles based on what the API returned (matching label or name)
+const filteredRoles = computed(() => {
+  if (availableRoleNames.value.length === 0) return roles
+  return roles.filter(r => {
+    // On compare le label local avec les noms renvoyés par l'API
+    // gestion du cas particulier "Interprofession" / "Interprofessionnalité"
+    if (r.id === 'interprofession') {
+      return availableRoleNames.value.some(name => name.includes('Interprofession'))
+    }
+    return availableRoleNames.value.includes(r.label)
+  })
+})
+
+const individualRoles = computed(() => filteredRoles.value.filter(r => r.category === 'individual'))
+const independentRoles = computed(() => filteredRoles.value.filter(r => r.category === 'independent'))
+const institutionalRoles = computed(() => filteredRoles.value.filter(r => r.category === 'institution'))
 
 function selectRole(roleId: UserRole) {
   selectedRole.value = roleId
 }
 
-function handleContinue() {
+async function handleContinue() {
   if (selectedRole.value) {
-    emit('select-role', selectedRole.value)
+    try {
+      // On récupère le rôle complet pour envoyer son label exact (nom) au backend
+      const roleObj = roles.find(r => r.id === selectedRole.value)
+      const roleNameToSend = roleObj?.id === 'interprofession' ? 'Interprofessionnalité' : (roleObj?.label || '')
+      
+      await authStore.setAnyRole(roleNameToSend)
+      emit('select-role', selectedRole.value)
+    } catch (error) {
+      toast.error('Erreur lors du choix du rôle')
+    }
   }
 }
 </script>
@@ -153,11 +193,9 @@ function handleContinue() {
               v-for="role in individualRoles"
               :key="role.id"
               class="p-6 cursor-pointer transition-all hover:shadow-lg"
-              :class="[
-                selectedRole === role.id
+              :class="selectedRole === role.id
                   ? 'border-primary ring-2 ring-primary ring-offset-2'
-                  : 'border-border hover:border-primary/50'
-              ]"
+                  : 'border-border hover:border-primary/50'"
               @click="selectRole(role.id)"
             >
               <div class="flex flex-col items-center text-center gap-3">
@@ -193,11 +231,9 @@ function handleContinue() {
               v-for="role in independentRoles"
               :key="role.id"
               class="p-6 cursor-pointer transition-all hover:shadow-lg"
-              :class="[
-                selectedRole === role.id
+              :class="selectedRole === role.id
                   ? 'border-primary ring-2 ring-primary ring-offset-2'
-                  : 'border-border hover:border-primary/50'
-              ]"
+                  : 'border-border hover:border-primary/50'"
               @click="selectRole(role.id)"
             >
               <div class="flex flex-col items-center text-center gap-3">
@@ -233,11 +269,9 @@ function handleContinue() {
               v-for="role in institutionalRoles"
               :key="role.id"
               class="p-6 cursor-pointer transition-all hover:shadow-lg"
-              :class="[
-                selectedRole === role.id
+              :class="selectedRole === role.id
                   ? 'border-primary ring-2 ring-primary ring-offset-2'
-                  : 'border-border hover:border-primary/50'
-              ]"
+                  : 'border-border hover:border-primary/50'"
               @click="selectRole(role.id)"
             >
               <div class="flex flex-col items-center text-center gap-3">
@@ -266,7 +300,8 @@ function handleContinue() {
     <div class="sticky bottom-0 z-10 bg-background border-t p-6">
       <div class="max-w-2xl w-full mx-auto">
         <Button
-          :disabled="!selectedRole"
+          :disabled="!selectedRole || authStore.isLoading"
+          :loading="authStore.isLoading"
           class="w-full h-12"
           @click="handleContinue"
         >

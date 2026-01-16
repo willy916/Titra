@@ -1,44 +1,45 @@
-export type UserRole = 
-  | "farmer" 
-  | "consumer" 
-  | "transporter" 
-  | "merchant" 
-  | "processor" 
-  | "cooperative" 
-  | "association" 
-  | "union" 
-  | "federation" 
-  | "interprofession" 
-  | "independent" 
-  | "admin" 
+export type UserRole =
+  | "farmer"
+  | "consumer"
+  | "transporter"
+  | "merchant"
+  | "processor"
+  | "cooperative"
+  | "association"
+  | "union"
+  | "federation"
+  | "interprofession"
+  | "independent"
+  | "admin"
   | "strategic_actor"
+  | "USER"
 
 export type AffiliationStatus = "independent" | "affiliated"
 
-export type InstitutionType = 
-  | "cooperative" 
-  | "association" 
-  | "union" 
-  | "federation" 
+export type InstitutionType =
+  | "cooperative"
+  | "association"
+  | "union"
+  | "federation"
   | "interprofession"
 
-export type StrategicActorType = 
-  | "exporter" 
-  | "major_buyer" 
-  | "institution" 
-  | "ministry" 
-  | "public_project" 
+export type StrategicActorType =
+  | "exporter"
+  | "major_buyer"
+  | "institution"
+  | "ministry"
+  | "public_project"
   | "parapublic_project"
 
 export interface User {
   id: string
   phone: string
   name: string
-  role: UserRole
+  role?: UserRole | null
   matricule?: string
   photo?: string
   location?: string
-  
+
   // Affiliation
   affiliationStatus?: AffiliationStatus
   cooperative?: string
@@ -46,11 +47,11 @@ export interface User {
   union?: string
   federation?: string
   interprofession?: string
-  
+
   // Financial
   balance?: number
   pendingBalance?: number
-  
+
   // Institution-specific
   institutionType?: InstitutionType
   members?: User[]
@@ -187,3 +188,4 @@ export type Screen =
   | "stats"
   | "accounting"
   | "training"
+  | "order-detail"
