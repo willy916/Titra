@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Camera, User as UserIcon } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
 import Label from '@/components/ui/Label.vue'
 
 interface Props {
@@ -15,6 +14,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:photo': [photo: string]
+  'select-file': [file: File]
 }>()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -23,10 +23,10 @@ function handlePhotoChange(e: Event) {
   const target = e.target as HTMLInputElement
   const file = target.files?.[0]
   if (file) {
+    emit('select-file', file)
     const reader = new FileReader()
     reader.onloadend = () => {
       emit('update:photo', reader.result as string)
-      toast.success('Photo ajoutée avec succès')
     }
     reader.readAsDataURL(file)
   }

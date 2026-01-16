@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { MapPin, Building2, Users, Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Label from '@/components/ui/Label.vue'
@@ -12,12 +13,14 @@ import InstitutionalAffiliationStep from '@/components/onboarding/InstitutionalA
 import TeamMembersStep from '@/components/onboarding/TeamMembersStep.vue'
 
 const emit = defineEmits<{ complete: [data: any] }>()
+const authStore = useAuthStore()
 
 const step = ref(1)
 const formData = ref({
   cooperativeName: '', registrationNumber: '', rccm: '', ncc: '', presidentName: '', location: '',
   filiere: '', customFiliere: '', secondaryFilieres: [] as string[], membersCount: '', yearFounded: '',
-  affiliationId: '', affiliationName: '', affiliationType: '', teamMembers: [] as any[]
+  affiliationId: '', affiliationName: '', affiliationType: '', teamMembers: [] as any[],
+  contactPhone: '', contactEmail: ''
 })
 const newSecondaryFiliere = ref('')
 const progress = computed(() => (step.value / 4) * 100)
@@ -28,7 +31,26 @@ const predefinedFilieres = [
   { value: 'vivrier', label: 'Cultures vivrières' }, { value: 'maraichage', label: 'Maraîchage' }
 ]
 
-function handleNext() { if (step.value < 4) step.value++; else emit('complete', formData.value) }
+async function handleNext() {
+  if (step.value === 1 && (!formData.value.cooperativeName || !formData.value.registrationNumber || !formData.value.presidentName || !formData.value.location)) {
+    toast.error('Veuillez remplir les champs obligatoires'); return
+  }
+  if (step.value === 2 && !formData.value.filiere && !formData.value.customFiliere) {
+    toast.error('Veuillez sélectionner une filière'); return
+  }
+  
+  if (step.value < 4) {
+    step.value++
+  } else {
+    try {
+      await authStore.completeCooperativeProfile(formData.value)
+      toast.success('Profil coopérative créé avec succès !')
+      emit('complete', formData.value)
+    } catch (error) {
+      toast.error('Erreur lors de la création du profil coopérative')
+    }
+  }
+}
 function handleBack() { if (step.value > 1) step.value-- }
 function handleAffiliationSelect(id: string, name: string, type: string) { formData.value.affiliationId = id; formData.value.affiliationName = name; formData.value.affiliationType = type }
 function addSecondaryFiliere(f: string) { if (f.trim() && !formData.value.secondaryFilieres.includes(f.trim())) { formData.value.secondaryFilieres.push(f.trim()); newSecondaryFiliere.value = ''; toast.success('Filière ajoutée') } }
@@ -78,7 +100,17 @@ const isStep2Valid = computed(() => (formData.value.filiere || formData.value.cu
 
       <div v-else class="space-y-6">
         <TeamMembersStep :members="formData.teamMembers" structure-type="coopérative" @update:members="formData.teamMembers = $event" />
-        <div class="flex gap-2"><Button variant="outline" class="flex-1" @click="handleBack">Retour</Button><Button class="flex-1" @click="handleNext">Terminer</Button></div>
+        <div class="flex gap-2">
+          <Button variant="outline" class="flex-1" @click="handleBack">Retour</Button>
+          <Button 
+            class="flex-1" 
+            :loading="authStore.isLoading" 
+            :disabled="authStore.isLoading"
+            @click="handleNext"
+          >
+            Terminer
+          </Button>
+        </div>
       </div>
     </div>
   </div>

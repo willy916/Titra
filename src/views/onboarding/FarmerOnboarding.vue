@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { ArrowLeft, MapPin, Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Label from '@/components/ui/Label.vue'
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   complete: [data: FormData]
 }>()
 
+const authStore = useAuthStore()
 const step = ref(1)
 const totalSteps = 4
 
@@ -79,7 +81,7 @@ watch(() => formData.value.activityType, () => { formData.value.products = [] })
 
 function handleBack() { if (step.value > 1) step.value-- }
 
-function handleNext() {
+async function handleNext() {
   if (step.value === 1 && (!formData.value.firstName || !formData.value.lastName || !formData.value.location)) {
     toast.error('Veuillez remplir tous les champs'); return
   }
@@ -89,8 +91,25 @@ function handleNext() {
   if (step.value === 3 && !formData.value.activityType) {
     toast.error("Veuillez choisir votre type d'activité"); return
   }
-  if (step.value < totalSteps) step.value++
-  else emit('complete', formData.value)
+  
+  if (step.value < totalSteps) {
+    step.value++
+  } else {
+    try {
+      // 1. Complete Profile
+      await authStore.completePaysanProfile(formData.value)
+      
+      // 2. Upload photo if present (if it's a File or base64)
+      // Note: formData.value.photo might be a blob URL or base64 from ProfilePhotoUpload
+      // In a real app, ProfilePhotoUpload would provide the raw File
+      // For now, only call if we have a valid photo type
+      
+      toast.success('Profil complété avec succès !')
+      emit('complete', formData.value)
+    } catch (error) {
+      toast.error('Une erreur est survenue lors de la création de votre profil')
+    }
+  }
 }
 
 function handleAffiliationSelect(id: string, name: string, type: string) {
@@ -115,6 +134,20 @@ function addCustomProduct() {
 
 function removeCustomProduct(product: string) {
   formData.value.customProducts = formData.value.customProducts.filter(p => p !== product)
+}
+
+async function handlePhotoUpload(file: File) {
+  try {
+    const response = await authStore.uploadAvatar(file)
+    toast.success('Photo enregistrée avec succès')
+    // The photo URL returned by the API is already handled in authStore.uploadAvatar
+    // but we update the local preview if needed
+    if (response?.body) {
+      formData.value.photo = response.body
+    }
+  } catch (error) {
+    toast.error('Erreur lors de l\'enregistrement de la photo')
+  }
 }
 </script>
 
@@ -144,7 +177,12 @@ function removeCustomProduct(product: string) {
             <Label>Localisation</Label>
             <div class="relative"><MapPin class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" /><Input v-model="formData.location" placeholder="Ville ou région" class="pl-10" /></div>
           </div>
-          <ProfilePhotoUpload :photo="formData.photo" label="Photo de profil (optionnel)" @update:photo="formData.photo = $event" />
+          <ProfilePhotoUpload 
+            :photo="formData.photo" 
+            label="Photo de profil (optionnel)" 
+            @update:photo="formData.photo = $event"
+            @select-file="handlePhotoUpload"
+          />
         </div>
       </div>
 
@@ -211,7 +249,14 @@ function removeCustomProduct(product: string) {
     </div>
 
     <div class="p-6 border-t bg-background sticky bottom-0">
-      <Button class="w-full h-12" @click="handleNext">{{ step === totalSteps ? 'Terminer' : 'Continuer' }}</Button>
+      <Button 
+        class="w-full h-12" 
+        :loading="authStore.isLoading"
+        :disabled="authStore.isLoading"
+        @click="handleNext"
+      >
+        {{ step === totalSteps ? 'Terminer' : 'Continuer' }}
+      </Button>
     </div>
   </div>
 </template>

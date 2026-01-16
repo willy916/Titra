@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { Phone, Leaf } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Label from '@/components/ui/Label.vue'
@@ -9,7 +11,7 @@ import bgImage from '@/assets/bg-agriculture.jpg'
 
 const emit = defineEmits<{
   login: []
-  'verify-otp': []
+  'verify-otp': [data: any]
 }>()
 
 type Step = 'phone' | 'otp'
@@ -34,17 +36,64 @@ function startCountdown() {
   }, 1000)
 }
 
-function handleSendOTP() {
-  step.value = 'otp'
-  startCountdown()
+const authStore = useAuthStore()
+
+function getFormattedPhone() {
+  const cleanPhone = phone.value.replace(/\s+/g, '')
+  if (cleanPhone.startsWith('225')) {
+    return cleanPhone
+  } else if (cleanPhone.length === 10) {
+    return `225${cleanPhone}`
+  }
+  return null
 }
 
-function handleResendOTP() {
-  startCountdown()
+async function handleSendOTP() {
+  const finalPhone = getFormattedPhone()
+  
+  if (!finalPhone || finalPhone.length !== 13) {
+    toast.error('Le numéro doit comporter 10 chiffres (l\'indicatif 225 sera ajouté)')
+    return
+  }
+
+  try {
+    await authStore.sendOtp(finalPhone)
+    step.value = 'otp'
+    startCountdown()
+    toast.success('Code OTP envoyé')
+  } catch (error) {
+    toast.error('Erreur lors de l\'envoi du code')
+  }
 }
 
-function handleVerifyOTP() {
-  emit('verify-otp')
+async function handleResendOTP() {
+  const finalPhone = getFormattedPhone()
+  if (!finalPhone) return
+
+  try {
+    await authStore.sendOtp(finalPhone)
+    startCountdown()
+    toast.success('Code OTP renvoyé')
+  } catch (error) {
+    toast.error('Erreur lors du renvoi du code')
+  }
+}
+
+async function handleVerifyOTP() {
+  if (otp.value.length !== 6) return
+  
+  const finalPhone = getFormattedPhone()
+  if (!finalPhone) {
+    toast.error('Erreur de format du numéro')
+    return
+  }
+
+  try {
+    const result = await authStore.verifyOtp(finalPhone, otp.value)
+    emit('verify-otp', result)
+  } catch (error) {
+    toast.error('Code OTP invalide')
+  }
 }
 
 function handleBack() {
@@ -180,13 +229,14 @@ onUnmounted(() => {
                       />
                     </div>
                     <p class="text-xs text-muted-foreground">
-                      Un numéro = un compte
+                      Exactement 10 chiffres (l'indicatif 225 sera ajouté)
                     </p>
                   </div>
 
                   <Button
                     class="w-full h-12"
-                    :disabled="!phone"
+                    :disabled="!phone || authStore.isLoading"
+                    :loading="authStore.isLoading"
                     @click="handleSendOTP"
                   >
                     Connexion
@@ -255,7 +305,8 @@ onUnmounted(() => {
 
                   <Button
                     class="w-full h-12"
-                    :disabled="otp.length !== 6"
+                    :disabled="otp.length !== 6 || authStore.isLoading"
+                    :loading="authStore.isLoading"
                     @click="handleVerifyOTP"
                   >
                     Vérifier

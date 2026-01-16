@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Toaster, toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -68,6 +68,18 @@ const screenData = ref<any>(null)
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const user = computed(() => authStore.user)
 
+onMounted(() => {
+  authStore.initializeAuth()
+  if (authStore.isAuthenticated) {
+    if (authStore.user?.role && authStore.user.role !== 'USER') {
+      currentScreen.value = 'home'
+    } else {
+      // Authenticated but no role yet = continue registration
+      currentScreen.value = 'role-selection'
+    }
+  }
+})
+
 // Screen title mapping
 const screenTitles: Record<string, string> = {
   home: 'Accueil',
@@ -93,8 +105,16 @@ const showFullLayout = computed(() => {
 })
 
 // Navigation handlers
-function handleVerifyOTP() {
-  currentScreen.value = 'role-selection'
+function handleVerifyOTP(authResult: any) {
+  const { isNewUser } = authResult
+  
+  if (isNewUser) {
+    currentScreen.value = 'role-selection'
+  } else {
+    // If not a new user, they should already have a role and be redirected to home
+    currentScreen.value = 'home'
+    toast.success('Bon retour sur TITRA !')
+  }
 }
 
 function handleSelectRole(role: UserRole) {
