@@ -65,6 +65,7 @@ export const useAuthStore = defineStore('auth', () => {
         otpCode,
       })
 
+      console.log('Verify OTP Response:', response.data)
       const responseData = response.data.body || response.data
       const { data, isNewUser } = responseData
 
@@ -77,6 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       // Transform API user to app User type
       const apiUser = data.user
+      console.log('API User object:', apiUser)
 
       // Role mapping helper
       const mapApiRoleToSlug = (roleName: string): UserRole => {
@@ -99,20 +101,34 @@ export const useAuthStore = defineStore('auth', () => {
 
       const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : null
 
+      // Try to find a name in all possible fields
+      const userName = apiUser.name ||
+        (apiUser.firstName && apiUser.lastName ? `${apiUser.firstName} ${apiUser.lastName}` : null) ||
+        apiUser.firstName ||
+        apiUser.phoneNumber ||
+        'Utilisateur'
+
       const mappedUser: User = {
         ...apiUser,
         id: apiUser.id,
         phone: apiUser.phoneNumber || '',
-        name: apiUser.name || '',
+        name: userName,
         role: roleSlug,
         verified: apiUser.verified,
         onboardingCompleted: apiUser.completed || false
       } as User
 
+      // Store role-specific name for dashboard display
+      if (roleSlug) {
+        (mappedUser as any)[roleSlug] = userName
+      }
+
+      console.log('Mapped User for storage:', mappedUser)
+
       setUser(mappedUser)
       localStorage.setItem('user', JSON.stringify(mappedUser))
 
-      return { ...response.data, isNewUser }
+      return { ...responseData, isNewUser }
     } catch (error) {
       console.error('Verify OTP error:', error)
       throw error
