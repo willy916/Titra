@@ -106,11 +106,17 @@ const showFullLayout = computed(() => {
 
 // Navigation handlers
 function handleVerifyOTP(authResult: any) {
-  currentScreen.value = 'home'
-  if (authStore.user?.onboardingCompleted) {
+  const { isNewUser } = authResult
+  
+  if (isNewUser) {
+    currentScreen.value = 'role-selection'
+  } else if (authStore.user?.onboardingCompleted) {
+    currentScreen.value = 'home'
     toast.success('Bon retour sur TITRA !')
+  } else if (authStore.user?.role && authStore.user.role !== 'USER') {
+    currentScreen.value = `${authStore.user.role}-onboarding` as Screen
   } else {
-    toast.success('Connexion réussie !')
+    currentScreen.value = 'role-selection'
   }
 }
 
