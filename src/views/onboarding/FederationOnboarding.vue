@@ -9,11 +9,13 @@ import Select from '@/components/ui/Select.vue'
 import Progress from '@/components/ui/Progress.vue'
 import Badge from '@/components/ui/Badge.vue'
 import InstitutionalAffiliationStep from '@/components/onboarding/InstitutionalAffiliationStep.vue'
+import { useAuthStore } from '@/stores/auth'
 import TeamMembersStep from '@/components/onboarding/TeamMembersStep.vue'
 
 const emit = defineEmits<{ complete: [data: any] }>()
+const authStore = useAuthStore()
 
-const step = ref(1)
+const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref({
   federationName: '', registrationNumber: '', rccm: '', ncc: '', presidentName: '', location: '', region: '',
   filiere: '', customFiliere: '', secondaryFilieres: [] as string[], membersCount: '', yearFounded: '',
@@ -34,8 +36,33 @@ const regionOptions = [
   { value: 'sectoriel', label: 'Sectoriel' }
 ]
 
-function handleNext() { if (step.value < 4) step.value++; else emit('complete', formData.value) }
-function handleBack() { if (step.value > 1) step.value-- }
+async function handleNext() { 
+  if (step.value === 1 && (!formData.value.federationName || !formData.value.registrationNumber || !formData.value.presidentName || !formData.value.region || !formData.value.location)) {
+    toast.error('Veuillez remplir les champs obligatoires'); return
+  }
+  if (step.value === 2 && !formData.value.filiere && !formData.value.customFiliere) {
+    toast.error('Veuillez sélectionner une filière'); return
+  }
+
+  if (step.value < 4) {
+    step.value++
+    authStore.setOnboardingStep(step.value)
+  } else {
+    try {
+      await authStore.completeFederationProfile(formData.value)
+      toast.success('Profil fédération créé avec succès !')
+      emit('complete', formData.value)
+    } catch (error) {
+      toast.error("Erreur lors de la création du profil de fédération")
+    }
+  }
+}
+function handleBack() { 
+  if (step.value > 1) {
+    step.value--
+    authStore.setOnboardingStep(step.value)
+  }
+}
 function handleAffiliationSelect(id: string, name: string, type: string) { formData.value.affiliationId = id; formData.value.affiliationName = name; formData.value.affiliationType = type }
 function addSecondaryFiliere(f: string) { if (f.trim() && !formData.value.secondaryFilieres.includes(f.trim())) { formData.value.secondaryFilieres.push(f.trim()); newSecondaryFiliere.value = ''; toast.success('Filière ajoutée') } }
 function removeSecondaryFiliere(i: number) { formData.value.secondaryFilieres.splice(i, 1); toast.success('Filière supprimée') }

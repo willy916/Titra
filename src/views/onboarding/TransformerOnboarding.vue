@@ -24,11 +24,14 @@ interface FormData {
   certification: string
 }
 
+import { useAuthStore } from '@/stores/auth'
+
 const emit = defineEmits<{
   complete: [data: FormData]
 }>()
 
-const step = ref(1)
+const authStore = useAuthStore()
+const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref<FormData>({
   firstName: '',
   lastName: '',
@@ -86,12 +89,25 @@ const transformedProducts = computed(() => {
 })
 
 function handleBack() {
-  if (step.value > 1) step.value--
+  if (step.value > 1) {
+    step.value--
+    authStore.setOnboardingStep(step.value)
+  }
 }
 
-function handleNext() {
-  if (step.value < 3) step.value++
-  else emit('complete', formData.value)
+async function handleNext() {
+  if (step.value < 3) {
+    step.value++
+    authStore.setOnboardingStep(step.value)
+  } else {
+    try {
+      await authStore.completeTransformerProfile(formData.value)
+      toast.success('Profil transformateur créé avec succès !')
+      emit('complete', formData.value)
+    } catch (error) {
+      toast.error("Erreur lors de la création du profil")
+    }
+  }
 }
 
 function toggleProduct(product: string) {

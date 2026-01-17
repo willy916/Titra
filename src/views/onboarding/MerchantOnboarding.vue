@@ -11,9 +11,12 @@ import Badge from '@/components/ui/Badge.vue'
 import RadioGroup from '@/components/ui/RadioGroup.vue'
 import RadioGroupItem from '@/components/ui/RadioGroupItem.vue'
 
-const emit = defineEmits<{ complete: [data: any] }>()
+import { useAuthStore } from '@/stores/auth'
 
-const step = ref(1)
+const emit = defineEmits<{ complete: [data: any] }>()
+const authStore = useAuthStore()
+
+const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref({
   firstName: '', lastName: '', shopName: '', location: '', deliveryZone: '',
   productsWanted: [] as string[], customProducts: [] as string[],
@@ -32,7 +35,27 @@ const shopTypeOptions = [
 
 const productCategories = ['Tubercules', 'Céréales', 'Légumes', 'Fruits', 'Produits transformés', 'Huiles', 'Épices', 'Volailles', 'Poissons']
 
-function handleNext() { if (step.value < 2) step.value++; else emit('complete', formData.value) }
+async function handleNext() { 
+  if (step.value < 2) {
+    step.value++
+    authStore.setOnboardingStep(step.value)
+  } else {
+    try {
+      await authStore.completeMerchantProfile(formData.value)
+      toast.success('Profil commerçant créé avec succès !')
+      emit('complete', formData.value)
+    } catch (error) {
+      toast.error("Erreur lors de la création du profil")
+    }
+  }
+}
+
+function handleBack() {
+  if (step.value > 1) {
+    step.value--
+    authStore.setOnboardingStep(step.value)
+  }
+}
 function toggleProduct(p: string) { const i = formData.value.productsWanted.indexOf(p); if (i > -1) formData.value.productsWanted.splice(i, 1); else formData.value.productsWanted.push(p) }
 function addCustomProduct() { if (newProductInput.value.trim()) { formData.value.customProducts.push(newProductInput.value.trim()); formData.value.productsWanted.push(newProductInput.value.trim()); toast.success(`${newProductInput.value.trim()} ajouté`); newProductInput.value = '' } }
 function removeCustomProduct(p: string) { formData.value.customProducts = formData.value.customProducts.filter(x => x !== p); formData.value.productsWanted = formData.value.productsWanted.filter(x => x !== p) }
@@ -68,7 +91,7 @@ function removeCustomProduct(p: string) { formData.value.customProducts = formDa
         <div class="space-y-2"><Label>Ajouter un produit personnalisé</Label><div class="flex gap-2"><Input v-model="newProductInput" placeholder="Ex: Pommes de terre, Tomates..." @keypress.enter.prevent="addCustomProduct" /><Button @click="addCustomProduct"><Plus class="w-4 h-4" /></Button></div><p class="text-xs text-muted-foreground">Le produit sera automatiquement ajouté à votre liste</p></div>
         <div v-if="formData.customProducts.length > 0" class="space-y-2"><Label>Produits personnalisés ajoutés</Label><div class="flex flex-wrap gap-2"><Badge v-for="p in formData.customProducts" :key="p" class="cursor-pointer bg-primary hover:bg-primary/80" @click="removeCustomProduct(p)">{{ p }} ✕</Badge></div></div>
         <div class="space-y-2"><Label>Catégories standards</Label><div class="flex flex-wrap gap-2"><Badge v-for="p in productCategories" :key="p" :variant="formData.productsWanted.includes(p) ? 'default' : 'outline'" class="cursor-pointer" @click="toggleProduct(p)">{{ p }}</Badge></div></div>
-        <div class="flex gap-2"><Button variant="outline" class="flex-1" @click="step = 1">Retour</Button><Button class="flex-1" :disabled="!formData.shopType || formData.productsWanted.length === 0" @click="handleNext">Terminer</Button></div>
+        <div class="flex gap-2"><Button variant="outline" class="flex-1" @click="handleBack">Retour</Button><Button class="flex-1" :disabled="!formData.shopType || formData.productsWanted.length === 0" @click="handleNext">Terminer</Button></div>
       </div>
     </div>
   </div>

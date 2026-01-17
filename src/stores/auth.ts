@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { User, UserRole } from '@/types'
+import type { User, UserRole, Institution } from '@/types'
 import { mockUser } from '@/data/mockData'
 import api from '@/services/api'
 
@@ -14,13 +14,34 @@ export const useAuthStore = defineStore('auth', () => {
   const userName = computed(() => user.value?.name ?? '')
   const userMatricule = computed(() => user.value?.matricule ?? '')
 
-  function setUser(newUser: User) {
-    user.value = newUser
+  function setOnboardingStep(step: number) {
+    if (user.value) {
+      user.value.currentOnboardingStep = step
+      user.value.onboardingCompleted = false
+      localStorage.setItem('user', JSON.stringify(user.value))
+    }
+  }
+
+  function completeOnboardingState() {
+    if (user.value) {
+      user.value.onboardingCompleted = true
+      localStorage.setItem('user', JSON.stringify(user.value))
+    }
+  }
+
+  function setUser(u: User | null) {
+    user.value = u
     isAuthenticated.value = true
   }
 
   function selectRole(role: UserRole) {
     selectedRole.value = role
+    if (user.value) {
+      user.value.role = role
+      user.value.currentOnboardingStep = 1
+      user.value.onboardingCompleted = false
+      localStorage.setItem('user', JSON.stringify(user.value))
+    }
   }
 
   async function sendOtp(phoneNumber: string) {
@@ -90,12 +111,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function skipOnboarding(role: UserRole) {
-    const newUser: User = {
-      ...mockUser,
-      role,
-      name: 'Nouveau Utilisateur',
+    if (user.value) {
+      user.value.role = role
+      user.value.onboardingCompleted = true
+      localStorage.setItem('user', JSON.stringify(user.value))
     }
-    setUser(newUser)
   }
 
   function logout() {
@@ -160,9 +180,11 @@ export const useAuthStore = defineStore('auth', () => {
         ...user.value!,
         name: `${payload.firstName} ${payload.lastName}`,
         location: payload.address,
-        role: 'farmer'
+        role: 'farmer',
+        onboardingCompleted: true
       }
       setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
       return response.data
     } catch (error) {
       console.error('Complete Profile error:', error)
@@ -199,18 +221,246 @@ export const useAuthStore = defineStore('auth', () => {
       console.log('Payload:', payload)
 
       const response = await api.put('/api/cooperative/complete-profile', payload)
+      const savedData = response.data.data || response.data.body || response.data
 
       const updatedUser: User = {
         ...user.value!,
-        name: payload.name,
-        location: payload.location,
-        role: 'cooperative'
+        name: savedData.name || payload.name,
+        cooperative: savedData.name || payload.name,
+        location: savedData.location || payload.location,
+        role: 'cooperative',
+        onboardingCompleted: true
       }
       setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+
       return response.data
     } catch (error) {
       console.error('Complete Cooperative Profile error:', error)
       throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function completeAssociationProfile(profileData: any) {
+    isLoading.value = true
+    try {
+      const payload: any = {
+        name: profileData.associationName,
+        registrationNumber: profileData.registrationNumber,
+        presidentName: profileData.presidentName,
+        location: profileData.location,
+        numberOfMembers: parseInt(profileData.membersCount) || 0,
+      }
+
+      if (profileData.rccm) payload.rccm = profileData.rccm
+      if (profileData.ncc) payload.ncc = profileData.ncc
+      if (profileData.yearFounded) payload.creationYear = parseInt(profileData.yearFounded)
+      if (profileData.filiere) payload.mainFiliere = profileData.filiere
+      if (profileData.customFiliere) payload.customMainFiliere = profileData.customFiliere
+      if (profileData.secondaryFilieres?.length) payload.secondaryFilieres = profileData.secondaryFilieres
+      if (profileData.contactPhone) payload.contactPhone = profileData.contactPhone
+      if (profileData.contactEmail) payload.contactEmail = profileData.contactEmail
+
+      console.log('--- completing association profile ---')
+      console.log('Payload:', payload)
+
+      const response = await api.put('/api/association/complete-profile', payload)
+      const savedData = response.data.data || response.data.body || response.data
+
+      const updatedUser: User = {
+        ...user.value!,
+        name: savedData.name || payload.name,
+        association: savedData.name || payload.name,
+        location: savedData.location || payload.location,
+        role: 'association',
+        onboardingCompleted: true
+      }
+      setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+
+      return response.data
+    } catch (error) {
+      console.error('Complete Association Profile error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function completeUnionProfile(profileData: any) {
+    isLoading.value = true
+    try {
+      const payload: any = {
+        name: profileData.unionName,
+        agrement: profileData.registrationNumber,
+        presidentName: profileData.presidentName,
+        siegeVille: profileData.location,
+        zoneCouverture: profileData.region,
+        numberOfCompagnie: parseInt(profileData.membersCount) || 0,
+        isIndependant: profileData.affiliationType === 'independent' || !profileData.affiliationId
+      }
+
+      if (profileData.rccm) payload.rccm = profileData.rccm
+      if (profileData.ncc) payload.ncc = profileData.ncc
+      if (profileData.yearFounded) payload.creationYear = parseInt(profileData.yearFounded)
+      if (profileData.affiliationId && !payload.isIndependant) {
+        payload.federationId = profileData.affiliationId
+      }
+
+      const response = await api.put('/api/union/complete-profile', payload)
+      const savedData = response.data.data || response.data.body || response.data
+
+      const updatedUser: User = {
+        ...user.value!,
+        name: savedData.name || payload.name,
+        union: savedData.name || payload.name,
+        location: savedData.siegeVille || payload.siegeVille,
+        role: 'union',
+        onboardingCompleted: true
+      }
+      setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+
+      return response.data
+    } catch (error) {
+      console.error('Complete Union Profile error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function completeFederationProfile(profileData: any) {
+    isLoading.value = true
+    try {
+      const payload: any = {
+        name: profileData.federationName,
+        agrement: profileData.registrationNumber,
+        presidentName: profileData.presidentName,
+        siegeVille: profileData.location,
+        zoneCouverture: profileData.region,
+        numberOfCompagnie: parseInt(profileData.membersCount) || 0,
+        isIndependant: profileData.affiliationType === 'independent' || !profileData.affiliationId
+      }
+
+      if (profileData.rccm) payload.rccm = profileData.rccm
+      if (profileData.ncc) payload.ncc = profileData.ncc
+      if (profileData.yearFounded) payload.creationYear = parseInt(profileData.yearFounded)
+      if (profileData.affiliationId && !payload.isIndependant) {
+        payload.interprofessionId = profileData.affiliationId
+      }
+
+      const response = await api.put('/api/federation/complete-profile', payload)
+      const savedData = response.data.data || response.data.body || response.data
+
+      const updatedUser: User = {
+        ...user.value!,
+        name: savedData.name || payload.name,
+        federation: savedData.name || payload.name,
+        location: savedData.siegeVille || payload.siegeVille,
+        role: 'federation',
+        onboardingCompleted: true
+      }
+      setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      return response.data
+    } catch (error) {
+      console.error('Complete Federation Profile error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function completeInterprofessionProfile(profileData: any) {
+    isLoading.value = true
+    try {
+      const payload: any = {
+        name: profileData.interprofessionName,
+        agrement: profileData.registrationNumber,
+        presidentName: profileData.presidentName,
+        siegeVille: profileData.location,
+        numberOfCompagnie: parseInt(profileData.membersCount) || 0,
+      }
+
+      if (profileData.rccm) payload.rccm = profileData.rccm
+      if (profileData.ncc) payload.ncc = profileData.ncc
+      if (profileData.yearFounded) payload.creationYear = parseInt(profileData.yearFounded)
+
+      const response = await api.put('/api/interprofession/complete-profile', payload)
+      const savedData = response.data.data || response.data.body || response.data
+
+      const updatedUser: User = {
+        ...user.value!,
+        name: savedData.name || payload.name,
+        interprofession: savedData.name || payload.name,
+        location: savedData.siegeVille || payload.siegeVille,
+        role: 'interprofession',
+        onboardingCompleted: true
+      }
+      setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      return response.data
+    } catch (error) {
+      console.error('Complete Interprofession Profile error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function completeTransformerProfile(profileData: any) {
+    isLoading.value = true
+    try {
+      // Mocking API call for now if endpoint doesn't exist
+      const updatedUser: User = {
+        ...user.value!,
+        name: `${profileData.firstName} ${profileData.lastName}`,
+        location: profileData.location,
+        role: 'processor',
+        onboardingCompleted: true
+      }
+      setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      return { success: true }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function completeMerchantProfile(profileData: any) {
+    isLoading.value = true
+    try {
+      const updatedUser: User = {
+        ...user.value!,
+        name: `${profileData.firstName} ${profileData.lastName}`,
+        location: profileData.location,
+        role: 'merchant',
+        onboardingCompleted: true
+      }
+      setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      return { success: true }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function completeTransporterProfile(profileData: any) {
+    isLoading.value = true
+    try {
+      const updatedUser: User = {
+        ...user.value!,
+        name: `${profileData.firstName} ${profileData.lastName}`,
+        location: profileData.location,
+        role: 'transporter',
+        onboardingCompleted: true
+      }
+      setUser(updatedUser)
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      return { success: true }
     } finally {
       isLoading.value = false
     }
@@ -238,6 +488,90 @@ export const useAuthStore = defineStore('auth', () => {
       throw error
     } finally {
       isLoading.value = false
+    }
+  }
+
+  async function getAllCooperatives(): Promise<Institution[]> {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/cooperative/all')
+      return response.data.body || response.data
+    } catch (error) {
+      console.error('Get all cooperatives error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getAllAssociations(): Promise<Institution[]> {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/association/all')
+      return response.data.body || response.data
+    } catch (error) {
+      console.error('Get all associations error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getAllUnions(): Promise<Institution[]> {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/union/all')
+      return response.data.body || response.data
+    } catch (error) {
+      console.error('Get all unions error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getAllFederations(): Promise<Institution[]> {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/federation/all')
+      return response.data.body || response.data
+    } catch (error) {
+      console.error('Get all federations error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getAllInterprofessions(): Promise<Institution[]> {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/interprofession/all')
+      return response.data.body || response.data
+    } catch (error) {
+      console.error('Get all interprofessions error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getAllFilieres(): Promise<any[]> {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/filiere/all')
+      return response.data.body || response.data
+    } catch (error) {
+      console.error('Get all filieres error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  function updateProfile(updates: Partial<User>) {
+    if (user.value) {
+      user.value = { ...user.value, ...updates }
     }
   }
 
@@ -271,12 +605,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function updateProfile(updates: Partial<User>) {
-    if (user.value) {
-      user.value = { ...user.value, ...updates }
-    }
-  }
-
   return {
     user,
     isAuthenticated,
@@ -292,12 +620,28 @@ export const useAuthStore = defineStore('auth', () => {
     completeOnboarding,
     completePaysanProfile,
     completeCooperativeProfile,
+    completeAssociationProfile,
+    completeUnionProfile,
+    completeFederationProfile,
+    completeInterprofessionProfile,
+    completeTransformerProfile,
+    completeMerchantProfile,
+    completeTransporterProfile,
     uploadAvatar,
     initializeAuth,
     skipOnboarding,
     logout,
     updateProfile,
+    setOnboardingStep,
+    completeOnboardingState,
     getAllRoles,
     setAnyRole,
+    getAllCooperatives,
+    getAllAssociations,
+    getAllUnions,
+    getAllFederations,
+    getAllInterprofessions,
+    getAllFilieres,
   }
-})
+}
+)

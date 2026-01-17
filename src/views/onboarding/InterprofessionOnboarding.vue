@@ -8,12 +8,14 @@ import Label from '@/components/ui/Label.vue'
 import Select from '@/components/ui/Select.vue'
 import Progress from '@/components/ui/Progress.vue'
 import Badge from '@/components/ui/Badge.vue'
+import { useAuthStore } from '@/stores/auth'
 import InstitutionalAffiliationStep from '@/components/onboarding/InstitutionalAffiliationStep.vue'
 import TeamMembersStep from '@/components/onboarding/TeamMembersStep.vue'
 
 const emit = defineEmits<{ complete: [data: any] }>()
+const authStore = useAuthStore()
 
-const step = ref(1)
+const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref({
   interprofessionName: '', registrationNumber: '', rccm: '', ncc: '', presidentName: '', location: '',
   filiere: '', customFiliere: '', secondaryFilieres: [] as string[], membersCount: '', yearFounded: '',
@@ -28,8 +30,33 @@ const predefinedFilieres = [
   { value: 'vivrier', label: 'Cultures vivrières' }, { value: 'maraichage', label: 'Maraîchage' }
 ]
 
-function handleNext() { if (step.value < 4) step.value++; else emit('complete', formData.value) }
-function handleBack() { if (step.value > 1) step.value-- }
+async function handleNext() { 
+  if (step.value === 1 && (!formData.value.interprofessionName || !formData.value.registrationNumber || !formData.value.presidentName || !formData.value.location)) {
+    toast.error('Veuillez remplir les champs obligatoires'); return
+  }
+  if (step.value === 2 && !formData.value.filiere && !formData.value.customFiliere) {
+    toast.error('Veuillez sélectionner une filière'); return
+  }
+
+  if (step.value < 4) {
+    step.value++
+    authStore.setOnboardingStep(step.value)
+  } else {
+    try {
+      await authStore.completeInterprofessionProfile(formData.value)
+      toast.success('Profil interprofession créé avec succès !')
+      emit('complete', formData.value)
+    } catch (error) {
+      toast.error("Erreur lors de la création du profil d'interprofession")
+    }
+  }
+}
+function handleBack() { 
+  if (step.value > 1) {
+    step.value--
+    authStore.setOnboardingStep(step.value)
+  }
+}
 function handleAffiliationSelect(id: string, name: string, type: string) { formData.value.affiliationId = id; formData.value.affiliationName = name; formData.value.affiliationType = type }
 function addSecondaryFiliere(f: string) { if (f.trim() && !formData.value.secondaryFilieres.includes(f.trim())) { formData.value.secondaryFilieres.push(f.trim()); newSecondaryFiliere.value = ''; toast.success('Filière ajoutée') } }
 function removeSecondaryFiliere(i: number) { formData.value.secondaryFilieres.splice(i, 1); toast.success('Filière supprimée') }

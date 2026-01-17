@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ArrowLeft, UserPlus, Building2, Landmark, Briefcase, User, Tractor, Sprout, Users } from 'lucide-vue-next'
+import { useAuthStore } from '@/stores/auth'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
@@ -95,15 +96,28 @@ const structureTypes = [
   { value: 'federation', label: 'Fédération' },
 ]
 
-const filiereOptions = [
-  { value: 'vivrier', label: 'Cultures vivrières' },
-  { value: 'maraichage', label: 'Maraîchage' },
-  { value: 'cacao', label: 'Cacao' },
-  { value: 'cafe', label: 'Café' },
-  { value: 'anacarde', label: 'Anacarde' },
-  { value: 'hevea', label: 'Hévéa' },
-  { value: 'palmier', label: 'Palmier à huile' },
-]
+const authStore = useAuthStore()
+const apiFilieres = ref<any[]>([])
+const filiereOptions = computed(() => {
+  if (apiFilieres.value.length === 0) return [
+    { value: 'vivrier', label: 'Cultures vivrières' },
+    { value: 'maraichage', label: 'Maraîchage' },
+    { value: 'cacao', label: 'Cacao' },
+    { value: 'cafe', label: 'Café' },
+    { value: 'anacarde', label: 'Anacarde' },
+    { value: 'hevea', label: 'Hévéa' },
+    { value: 'palmier', label: 'Palmier à huile' },
+  ]
+  return apiFilieres.value.map(f => ({ value: f.id, label: f.libelle }))
+})
+
+onMounted(async () => {
+  try {
+    apiFilieres.value = await authStore.getAllFilieres()
+  } catch (error) {
+    console.error('Failed to fetch filieres:', error)
+  }
+})
 
 const handleSubmit = () => {
   if (isAddingFarmer.value) {

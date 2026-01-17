@@ -52,7 +52,6 @@ import CartView from '@/views/cart/CartView.vue'
 
 // Navigation
 import Sidebar from '@/components/navigation/Sidebar.vue'
-import BottomNav from '@/components/navigation/BottomNav.vue'
 import TopBar from '@/components/navigation/TopBar.vue'
 import MobileSidebar from '@/components/navigation/MobileSidebar.vue'
 
@@ -71,10 +70,11 @@ const user = computed(() => authStore.user)
 onMounted(() => {
   authStore.initializeAuth()
   if (authStore.isAuthenticated) {
-    if (authStore.user?.role && authStore.user.role !== 'USER') {
+    if (authStore.user?.onboardingCompleted) {
       currentScreen.value = 'home'
+    } else if (authStore.user?.role && authStore.user.role !== 'USER') {
+      currentScreen.value = `${authStore.user.role}-onboarding` as Screen
     } else {
-      // Authenticated but no role yet = continue registration
       currentScreen.value = 'role-selection'
     }
   }
@@ -110,10 +110,13 @@ function handleVerifyOTP(authResult: any) {
   
   if (isNewUser) {
     currentScreen.value = 'role-selection'
-  } else {
-    // If not a new user, they should already have a role and be redirected to home
+  } else if (authStore.user?.onboardingCompleted) {
     currentScreen.value = 'home'
     toast.success('Bon retour sur TITRA !')
+  } else if (authStore.user?.role && authStore.user.role !== 'USER') {
+    currentScreen.value = `${authStore.user.role}-onboarding` as Screen
+  } else {
+    currentScreen.value = 'role-selection'
   }
 }
 
@@ -225,9 +228,9 @@ const OnboardingComponent = computed(() => {
       <Sidebar
         v-if="user"
         :active-screen="currentScreen"
-        :role="user.role"
-        :user-name="user.name"
-        :user-matricule="user.matricule"
+        :role="(user.role || 'farmer') as UserRole"
+        :user-name="user.name || ''"
+        :user-matricule="user.matricule || ''"
         :cart-count="cartStore.totalItems"
         @navigate="handleNavigate"
         @logout="handleLogout"
@@ -238,9 +241,9 @@ const OnboardingComponent = computed(() => {
         v-if="user"
         :is-open="isMobileSidebarOpen"
         :active-screen="currentScreen"
-        :role="user.role"
-        :user-name="user.name"
-        :user-matricule="user.matricule"
+        :role="(user.role || 'farmer') as UserRole"
+        :user-name="user.name || ''"
+        :user-matricule="user.matricule || ''"
         :cart-count="cartStore.totalItems"
         @close="isMobileSidebarOpen = false"
         @navigate="handleNavigate"
@@ -253,7 +256,7 @@ const OnboardingComponent = computed(() => {
         <TopBar
           v-if="showFullLayout && user"
           :title="currentTitle"
-          :user-name="user.name"
+          :user-name="user.name || ''"
           @menu-click="toggleMobileSidebar"
           @profile-click="handleNavigate('profile')"
         />
@@ -310,7 +313,7 @@ const OnboardingComponent = computed(() => {
           <!-- Orders -->
           <OrdersView
             v-else-if="currentScreen === 'orders' && user"
-            :user-role="user.role"
+            :user-role="(user.role || 'farmer') as UserRole"
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
           />
@@ -319,7 +322,7 @@ const OnboardingComponent = computed(() => {
           <OrderDetailView
             v-else-if="currentScreen === 'order-detail' && screenData?.order && user"
             :order="screenData.order"
-            :user-role="user.role"
+            :user-role="(user.role || 'farmer') as UserRole"
             @back="handleNavigate('orders')"
             @navigate="handleNavigate"
           />
@@ -335,7 +338,7 @@ const OnboardingComponent = computed(() => {
           <!-- Accounting -->
           <AccountingView
             v-else-if="currentScreen === 'accounting' && user"
-            :user-role="user.role"
+            :user-role="(user.role || 'farmer') as UserRole"
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
           />
@@ -343,7 +346,7 @@ const OnboardingComponent = computed(() => {
           <!-- Stats -->
           <StatsView
             v-else-if="currentScreen === 'stats' && user"
-            :user-role="user.role"
+            :user-role="(user.role || 'farmer') as UserRole"
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
           />
@@ -351,7 +354,7 @@ const OnboardingComponent = computed(() => {
           <!-- Members -->
           <MembersView
             v-else-if="currentScreen === 'members' && user"
-            :user-role="user.role"
+            :user-role="(user.role || 'farmer') as UserRole"
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
           />
@@ -359,7 +362,7 @@ const OnboardingComponent = computed(() => {
           <!-- Add Member -->
           <AddMemberView
             v-else-if="currentScreen === 'add-member' && user"
-            :user-role="user.role"
+            :user-role="(user.role || 'farmer') as UserRole"
             @back="handleNavigate('members')"
             @navigate="handleNavigate"
           />

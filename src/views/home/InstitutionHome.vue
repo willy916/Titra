@@ -11,9 +11,22 @@ const emit = defineEmits<{ navigate: [screen: string] }>()
 const isLoading = ref(true)
 onMounted(() => { setTimeout(() => isLoading.value = false, 1000) })
 
+const displayName = computed(() => {
+  const role = props.user.role as string
+  const roleSpecificName = (props.user as any)[role]
+  return roleSpecificName || props.user.name || 'Structure'
+})
+
 const getRoleLabel = () => {
-  const labels: Record<string, string> = { cooperative: 'Coopérative', association: 'Association', union: 'Union', federation: 'Fédération', interprofession: 'Interprofession', independent: 'Indépendant' }
-  return labels[props.user.role] || 'Structure'
+  const labels: Record<string, string> = { 
+    cooperative: 'Coopérative', 
+    association: 'Association', 
+    union: 'Union', 
+    federation: 'Fédération', 
+    interprofession: 'Interprofession', 
+    independent: 'Indépendant' 
+  }
+  return labels[props.user.role as string] || 'Structure'
 }
 
 const stats = computed(() => {
@@ -87,7 +100,20 @@ function getActivityClass(type: string) {
     <div class="p-4 lg:p-0 space-y-6">
       <!-- Stats Grid -->
       <div class="bg-gradient-to-br from-[#2D5016] via-[#2D5016] to-[#1a3009] rounded-xl p-6 -mx-4 lg:mx-0">
-        <h3 class="text-white mb-4">Vue d'ensemble</h3>
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-white/80 text-sm">{{ getRoleLabel() }}</p>
+            <h3 class="text-white">{{ displayName }}</h3>
+          </div>
+          <div class="flex gap-2">
+            <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <Bell class="w-5 h-5 text-white" />
+            </button>
+            <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <Settings class="w-5 h-5 text-white" />
+            </button>
+          </div>
+        </div>
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <template v-if="isLoading">
             <div v-for="i in 4" :key="i" class="bg-white/10 backdrop-blur-sm rounded-xl p-4 animate-pulse">

@@ -11,6 +11,23 @@ const emit = defineEmits<{ navigate: [screen: string] }>()
 const isLoading = ref(true)
 onMounted(() => { setTimeout(() => isLoading.value = false, 1000) })
 
+const displayName = computed(() => {
+  const role = props.user.role as string
+  const roleSpecificName = (props.user as any)[role]
+  return roleSpecificName || props.user.name || 'Structure'
+})
+
+const getRoleLabel = () => {
+  const labels: Record<string, string> = { 
+    cooperative: 'Coopérative', 
+    association: 'Association', 
+    union: 'Union', 
+    federation: 'Fédération', 
+    interprofession: 'Interprofession' 
+  }
+  return labels[props.user.role as string] || 'Structure'
+}
+
 const stats = computed(() => [
   { label: 'Membres totaux', value: '147', icon: Users, description: '132 actifs ce mois' },
   { label: 'Produits vendus', value: '324', icon: Package, description: 'Vendus ce mois' },
@@ -60,8 +77,8 @@ function getActivityClass(type: string) {
       <div class="bg-gradient-to-br from-[#2D5016] via-[#2D5016] to-[#1a3009] rounded-xl p-6 -mx-4 lg:mx-0">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <p class="text-white/80 text-sm">Coopérative</p>
-            <h3 class="text-white">{{ user.cooperative || 'SCOOP-CA' }}</h3>
+            <p class="text-white/80 text-sm">{{ getRoleLabel() }}</p>
+            <h3 class="text-white">{{ displayName }}</h3>
           </div>
           <div class="flex gap-2">
             <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">

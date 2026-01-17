@@ -31,6 +31,37 @@ export type StrategicActorType =
   | "public_project"
   | "parapublic_project"
 
+export interface Filiere {
+  id: string
+  libelle: string
+  status: number
+  deleted: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Institution {
+  id: string
+  name: string
+  agrement?: string
+  rccm?: string
+  ncc?: string
+  adresse?: string
+  yearOfCreation?: string
+  filiere?: Filiere
+  createdAt: string
+  updatedAt: string
+  logo?: string
+  status: number
+  deleted: boolean
+  matricule?: string
+  presidentName?: string
+  numberOfMembers?: number
+  contactPhone?: string
+  contactEmail?: string
+  secondaryFilieres?: string[]
+}
+
 export interface User {
   id: string
   phone: string
@@ -56,6 +87,8 @@ export interface User {
   institutionType?: InstitutionType
   members?: User[]
   commissionRate?: number
+  onboardingCompleted?: boolean
+  currentOnboardingStep?: number
 }
 
 export interface Product {

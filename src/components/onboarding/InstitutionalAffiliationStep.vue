@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Search, Building2, CheckCircle2, Info, Edit } from 'lucide-vue-next'
-import type { UserRole } from '@/types'
+import { ref, computed, onMounted } from 'vue'
+import { Search, Building2, CheckCircle2, Info, Edit, Loader2 } from 'lucide-vue-next'
+import { useAuthStore } from '@/stores/auth'
+import type { UserRole, Institution } from '@/types'
 import Label from '@/components/ui/Label.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
@@ -23,46 +24,117 @@ const emit = defineEmits<{
   skip: []
 }>()
 
-// Mock data - En production, cela viendrait de Supabase
-const mockStructures = {
-  interprofessions: [
-    { id: 'ip-001', name: 'Conseil Café-Cacao (CCC)', type: 'interprofession', filiere: 'Cacao, Café' },
-    { id: 'ip-002', name: 'Interprofession Cajou (ICA)', type: 'interprofession', filiere: 'Anacarde' },
-    { id: 'ip-003', name: 'Intercoton', type: 'interprofession', filiere: 'Coton' },
-    { id: 'ip-004', name: 'Interprofession Palmier à Huile', type: 'interprofession', filiere: 'Palmier' },
-    { id: 'ip-005', name: 'Instance Nationale Agriculture CI', type: 'interprofession', filiere: 'Toutes filières' },
-  ],
-  federations: [
-    { id: 'fed-001', name: 'Fédération Nationale du Cacao (FNCC)', type: 'federation', interprofession: 'ip-001', region: 'Nationale' },
-    { id: 'fed-002', name: 'Fédération des Producteurs de Café', type: 'federation', interprofession: 'ip-001', region: 'Nationale' },
-    { id: 'fed-003', name: 'Fédération Anacarde du Sud', type: 'federation', interprofession: 'ip-002', region: 'Sud' },
-    { id: 'fed-004', name: 'Fédération du Centre-Ouest', type: 'federation', interprofession: 'ip-001', region: 'Centre-Ouest' },
-  ],
-  unions: [
-    { id: 'uni-001', name: 'Union Régionale des Coopératives Agricoles CI (URCACI)', type: 'union', federation: 'fed-001', region: 'Abidjan' },
-    { id: 'uni-002', name: 'Union des Producteurs du Sud', type: 'union', federation: 'fed-001', region: 'Sud' },
-    { id: 'uni-003', name: 'Union Centre-Ouest Cacao', type: 'union', federation: 'fed-004', region: 'Centre-Ouest' },
-    { id: 'uni-004', name: 'Union Anacarde Bondoukou', type: 'union', federation: 'fed-003', region: 'Est' },
-  ],
-  cooperatives: [
-    { id: 'coop-001', name: 'SCOOP-CA Agnibilékrou', type: 'cooperative', union: 'uni-001', location: 'Agnibilékrou' },
-    { id: 'coop-002', name: 'Coopérative des Planteurs de Divo', type: 'cooperative', union: 'uni-002', location: 'Divo' },
-    { id: 'coop-003', name: 'COOP Cacao Gagnoa', type: 'cooperative', union: 'uni-003', location: 'Gagnoa' },
-    { id: 'coop-004', name: 'SCOOP Anacarde Bondoukou', type: 'cooperative', union: 'uni-004', location: 'Bondoukou' },
-    { id: 'coop-005', name: 'Coopérative Jeunes Agriculteurs Yamoussoukro', type: 'cooperative', union: 'uni-001', location: 'Yamoussoukro' },
-  ],
-  associations: [
-    { id: 'asso-001', name: 'Association des Producteurs de Café Bio', type: 'association', union: 'uni-001', location: 'Abidjan' },
-    { id: 'asso-002', name: 'Association Femmes Agricultrices du Sud', type: 'association', union: 'uni-002', location: 'Sud' },
-    { id: 'asso-003', name: 'Association Jeunes Planteurs Anacarde', type: 'association', union: 'uni-004', location: 'Bondoukou' },
-  ],
-}
+const authStore = useAuthStore()
+const isLoading = ref(false)
+const institutions = ref<{
+  cooperatives: Institution[]
+  associations: Institution[]
+  unions: any[]
+  federations: any[]
+  interprofessions: any[]
+}>({
+  cooperatives: [],
+  associations: [],
+  unions: [],
+  federations: [],
+  interprofessions: []
+})
+
+// Initialized on mount from API
+
+onMounted(async () => {
+  isLoading.value = true
+  try {
+    const roles = {
+      farmer: ['cooperatives', 'associations'],
+      cooperative: ['cooperatives', 'associations', 'unions', 'federations'],
+      association: ['associations', 'unions', 'federations'],
+      union: ['unions'],
+      federation: ['federations'],
+      interprofession: ['interprofessions']
+    }
+
+    const needed = roles[props.userRole as keyof typeof roles] || []
+    const promises: Promise<any>[] = []
+
+    if (needed.includes('cooperatives')) {
+      promises.push(authStore.getAllCooperatives().then(res => institutions.value.cooperatives = res))
+    }
+    if (needed.includes('associations')) {
+      promises.push(authStore.getAllAssociations().then(res => institutions.value.associations = res))
+    }
+    if (needed.includes('unions')) {
+      promises.push(authStore.getAllUnions().then(res => institutions.value.unions = res))
+    }
+    if (needed.includes('federations')) {
+      promises.push(authStore.getAllFederations().then(res => institutions.value.federations = res))
+    }
+    if (needed.includes('interprofessions')) {
+      promises.push(authStore.getAllInterprofessions().then(res => institutions.value.interprofessions = res))
+    }
+
+    await Promise.allSettled(promises)
+  } catch (error) {
+    console.error('Failed to fetch institutions:', error)
+  } finally {
+    isLoading.value = false
+  }
+})
 
 const searchTerm = ref('')
 const selected = ref(props.selectedAffiliation || '')
 const isManualEntry = ref(false)
 const manualStructureName = ref('')
 const manualStructureLocation = ref('')
+
+// Map API institutions to view format
+const formatLocation = (inst: Institution) => {
+  if (inst.adresse) return inst.adresse
+  if (inst.contactPhone && inst.contactPhone.includes(' - ')) {
+    return inst.contactPhone.split(' - ')[1]
+  }
+  return inst.contactPhone || 'N/A'
+}
+
+const apiCooperatives = computed(() => institutions.value.cooperatives.map(c => ({
+  id: c.id,
+  name: c.name,
+  type: 'cooperative',
+  location: formatLocation(c),
+  filiere: c.filiere?.libelle
+})))
+
+const apiAssociations = computed(() => institutions.value.associations.map(a => ({
+  id: a.id,
+  name: a.name,
+  type: 'association',
+  location: formatLocation(a),
+  filiere: a.filiere?.libelle
+})))
+
+const apiUnions = computed(() => institutions.value.unions.map(u => ({
+  id: u.id,
+  name: u.name,
+  type: 'union',
+  location: formatLocation(u),
+  filiere: u.filiere?.libelle
+})))
+
+const apiFederations = computed(() => institutions.value.federations.map(f => ({
+  id: f.id,
+  name: f.name,
+  type: 'federation',
+  location: formatLocation(f),
+  filiere: f.filiere?.libelle
+})))
+
+const apiInterprofessions = computed(() => institutions.value.interprofessions.map(i => ({
+  id: i.id,
+  name: i.name,
+  type: 'interprofession',
+  location: formatLocation(i),
+  filiere: i.filiere?.libelle
+})))
 
 // Déterminer quelle liste de structures afficher selon le rôle
 const affiliationInfo = computed(() => {
@@ -71,36 +143,42 @@ const affiliationInfo = computed(() => {
       return {
         title: 'Sélectionnez votre Coopérative ou Association',
         description: "Choisissez la structure à laquelle vous appartenez. Si vous n'êtes affilié à aucune structure, vous serez enregistré comme producteur indépendant.",
-        structures: [...mockStructures.cooperatives, ...mockStructures.associations],
+        structures: [...apiCooperatives.value, ...apiAssociations.value],
         canSkip: true,
       }
     case 'cooperative':
+      return {
+        title: 'Sélectionnez votre Coopérative, Association, Union ou Fédération',
+        description: "Choisissez la structure dont vous dépendez.",
+        structures: [...apiCooperatives.value, ...apiAssociations.value, ...apiUnions.value, ...apiFederations.value],
+        canSkip: true,
+      }
     case 'association':
       return {
-        title: 'Sélectionnez votre Union ou Fédération',
-        description: "Choisissez l'union ou la fédération dont vous dépendez. Vous pouvez être indépendant si vous n'êtes pas encore rattaché.",
-        structures: [...mockStructures.unions, ...mockStructures.federations],
+        title: 'Sélectionnez votre Coopérative, Union ou Fédération',
+        description: "Choisissez la structure dont vous dépendez.",
+        structures: [...apiCooperatives.value, ...apiUnions.value, ...apiFederations.value],
         canSkip: true,
       }
     case 'union':
       return {
-        title: 'Sélectionnez votre Fédération',
-        description: 'Choisissez la fédération dont vous dépendez.',
-        structures: mockStructures.federations,
+        title: 'Sélectionnez votre Union',
+        description: 'Choisissez l\'Union de base dont vous dépendez.',
+        structures: apiUnions.value,
         canSkip: false,
       }
     case 'federation':
       return {
-        title: 'Sélectionnez votre Interprofession',
-        description: "Choisissez l'interprofession dont vous dépendez.",
-        structures: mockStructures.interprofessions,
+        title: 'Sélectionnez votre Fédération',
+        description: "Choisissez la Fédération dont vous dépendez.",
+        structures: apiFederations.value,
         canSkip: false,
       }
     case 'interprofession':
       return {
         title: 'Rattachement à une instance nationale (optionnel)',
         description: 'Vous pouvez être indépendante ou rattachée à une instance nationale.',
-        structures: mockStructures.interprofessions.filter(ip => ip.filiere === 'Toutes filières'),
+        structures: apiInterprofessions.value.filter(ip => ip.filiere === 'Toutes filières'),
         canSkip: true,
       }
     default:
@@ -233,7 +311,11 @@ function getTypeLabel(type: string): string {
 
     <!-- Liste des structures -->
     <div class="space-y-2 max-h-[300px] sm:max-h-[400px] overflow-y-auto">
-      <template v-if="filteredStructures.length > 0">
+      <div v-if="isLoading" class="flex flex-col items-center justify-center p-8 space-y-4">
+        <Loader2 class="w-8 h-8 text-primary animate-spin" />
+        <p class="text-sm text-muted-foreground font-medium">Récupération des structures en cours...</p>
+      </div>
+      <template v-else-if="filteredStructures.length > 0">
         <Card
           v-for="structure in filteredStructures"
           :key="structure.id"

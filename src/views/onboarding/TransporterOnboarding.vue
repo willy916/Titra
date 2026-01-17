@@ -11,9 +11,12 @@ import Badge from '@/components/ui/Badge.vue'
 
 interface Vehicle { type: string; plate: string; capacity: string; capacityUnit: string; customCapacityUnit: string }
 
-const emit = defineEmits<{ complete: [data: any] }>()
+import { useAuthStore } from '@/stores/auth'
 
-const step = ref(1)
+const emit = defineEmits<{ complete: [data: any] }>()
+const authStore = useAuthStore()
+
+const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref({ firstName: '', lastName: '', vehicles: [] as Vehicle[], location: '', zonescovered: [] as string[], customZones: [] as string[], hasInsurance: '', license: '' })
 const currentVehicle = ref<Vehicle>({ type: '', plate: '', capacity: '', capacityUnit: 'kg', customCapacityUnit: '' })
 const newZoneInput = ref('')
@@ -24,7 +27,27 @@ const capacityUnitOptions = [{ value: 'kg', label: 'kg' }, { value: 'tonne', lab
 const insuranceOptions = [{ value: 'yes', label: 'Oui, assuré' }, { value: 'no', label: 'Non, pas encore' }]
 const zones = ['Abidjan', 'Yamoussoukro', 'Bouaké', 'Daloa', 'San-Pédro', 'Korhogo', 'Man', 'Gagnoa', 'Divo', 'Odienné']
 
-function handleNext() { if (step.value < 2) step.value++; else emit('complete', formData.value) }
+async function handleNext() { 
+  if (step.value < 2) {
+    step.value++
+    authStore.setOnboardingStep(step.value)
+  } else {
+    try {
+      await authStore.completeTransporterProfile(formData.value)
+      toast.success('Profil transporteur créé avec succès !')
+      emit('complete', formData.value)
+    } catch (error) {
+      toast.error("Erreur lors de la création du profil")
+    }
+  }
+}
+
+function handleBack() {
+  if (step.value > 1) {
+    step.value--
+    authStore.setOnboardingStep(step.value)
+  }
+}
 function addVehicle() { if (currentVehicle.value.type && currentVehicle.value.plate && currentVehicle.value.capacity) { formData.value.vehicles.push({ ...currentVehicle.value }); currentVehicle.value = { type: '', plate: '', capacity: '', capacityUnit: 'kg', customCapacityUnit: '' }; toast.success('Véhicule ajouté') } }
 function removeVehicle(i: number) { formData.value.vehicles.splice(i, 1); toast.success('Véhicule supprimé') }
 function toggleZone(z: string) { const i = formData.value.zonescovered.indexOf(z); if (i > -1) formData.value.zonescovered.splice(i, 1); else formData.value.zonescovered.push(z) }
@@ -65,7 +88,7 @@ function getVehicleLabel(t: string) { return vehicleTypeOptions.find(v => v.valu
         <div class="space-y-2"><Label>Ajouter une zone personnalisée</Label><div class="flex gap-2"><Input v-model="newZoneInput" placeholder="Ex: Cocody, Marcory..." @keypress.enter.prevent="addCustomZone" /><Button :disabled="!newZoneInput.trim()" @click="addCustomZone"><Plus class="w-4 h-4" /></Button></div><p class="text-xs text-muted-foreground">Ajoutez d'autres zones qui ne sont pas dans la liste</p></div>
         <div v-if="formData.customZones.length > 0" class="space-y-2"><Label>Zones personnalisées ({{ formData.customZones.length }})</Label><div class="flex flex-wrap gap-2"><Badge v-for="(z, i) in formData.customZones" :key="i" class="cursor-pointer bg-primary hover:bg-primary/80" @click="removeCustomZone(i)">{{ z }} ✕</Badge></div></div>
         <div class="space-y-2"><Label>Assurance véhicule</Label><Select v-model="formData.hasInsurance" :options="insuranceOptions" placeholder="Sélectionnez" /></div>
-        <div class="flex gap-2"><Button variant="outline" class="flex-1" @click="step = 1">Retour</Button><Button class="flex-1" :disabled="!formData.location || (formData.zonescovered.length === 0 && formData.customZones.length === 0)" @click="handleNext">Terminer</Button></div>
+        <div class="flex gap-2"><Button variant="outline" class="flex-1" @click="handleBack">Retour</Button><Button class="flex-1" :disabled="!formData.location || (formData.zonescovered.length === 0 && formData.customZones.length === 0)" @click="handleNext">Terminer</Button></div>
       </div>
     </div>
   </div>

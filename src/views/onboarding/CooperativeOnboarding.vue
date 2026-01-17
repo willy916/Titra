@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { MapPin, Building2, Users, Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
@@ -15,7 +15,7 @@ import TeamMembersStep from '@/components/onboarding/TeamMembersStep.vue'
 const emit = defineEmits<{ complete: [data: any] }>()
 const authStore = useAuthStore()
 
-const step = ref(1)
+const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref({
   cooperativeName: '', registrationNumber: '', rccm: '', ncc: '', presidentName: '', location: '',
   filiere: '', customFiliere: '', secondaryFilieres: [] as string[], membersCount: '', yearFounded: '',
@@ -25,11 +25,23 @@ const formData = ref({
 const newSecondaryFiliere = ref('')
 const progress = computed(() => (step.value / 4) * 100)
 
-const predefinedFilieres = [
-  { value: 'cacao', label: 'Cacao' }, { value: 'cafe', label: 'Café' }, { value: 'anacarde', label: 'Anacarde' },
-  { value: 'coton', label: 'Coton' }, { value: 'palmier', label: 'Palmier à huile' }, { value: 'hevea', label: 'Hévéa' },
-  { value: 'vivrier', label: 'Cultures vivrières' }, { value: 'maraichage', label: 'Maraîchage' }
-]
+const apiFilieres = ref<any[]>([])
+const predefinedFilieres = computed(() => {
+  if (apiFilieres.value.length === 0) return [
+    { value: 'cacao', label: 'Cacao' }, { value: 'cafe', label: 'Café' }, { value: 'anacarde', label: 'Anacarde' },
+    { value: 'coton', label: 'Coton' }, { value: 'palmier', label: 'Palmier à huile' }, { value: 'hevea', label: 'Hévéa' },
+    { value: 'vivrier', label: 'Cultures vivrières' }, { value: 'maraichage', label: 'Maraîchage' }
+  ]
+  return apiFilieres.value.map(f => ({ value: f.id, label: f.libelle }))
+})
+
+onMounted(async () => {
+  try {
+    apiFilieres.value = await authStore.getAllFilieres()
+  } catch (error) {
+    console.error('Failed to fetch filieres:', error)
+  }
+})
 
 async function handleNext() {
   if (step.value === 1 && (!formData.value.cooperativeName || !formData.value.registrationNumber || !formData.value.presidentName || !formData.value.location)) {
@@ -41,6 +53,7 @@ async function handleNext() {
   
   if (step.value < 4) {
     step.value++
+    authStore.setOnboardingStep(step.value)
   } else {
     try {
       await authStore.completeCooperativeProfile(formData.value)
@@ -51,7 +64,12 @@ async function handleNext() {
     }
   }
 }
-function handleBack() { if (step.value > 1) step.value-- }
+function handleBack() { 
+  if (step.value > 1) {
+    step.value--
+    authStore.setOnboardingStep(step.value)
+  }
+}
 function handleAffiliationSelect(id: string, name: string, type: string) { formData.value.affiliationId = id; formData.value.affiliationName = name; formData.value.affiliationType = type }
 function addSecondaryFiliere(f: string) { if (f.trim() && !formData.value.secondaryFilieres.includes(f.trim())) { formData.value.secondaryFilieres.push(f.trim()); newSecondaryFiliere.value = ''; toast.success('Filière ajoutée') } }
 function removeSecondaryFiliere(i: number) { formData.value.secondaryFilieres.splice(i, 1); toast.success('Filière supprimée') }

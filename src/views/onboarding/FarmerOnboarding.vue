@@ -35,7 +35,7 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
-const step = ref(1)
+const step = ref(authStore.user?.currentOnboardingStep || 1)
 const totalSteps = 4
 
 const formData = ref<FormData>({
@@ -79,7 +79,12 @@ const displayProducts = computed(() => {
 
 watch(() => formData.value.activityType, () => { formData.value.products = [] })
 
-function handleBack() { if (step.value > 1) step.value-- }
+function handleBack() { 
+  if (step.value > 1) {
+    step.value--
+    authStore.setOnboardingStep(step.value)
+  }
+}
 
 async function handleNext() {
   if (step.value === 1 && (!formData.value.firstName || !formData.value.lastName || !formData.value.location)) {
@@ -94,6 +99,7 @@ async function handleNext() {
   
   if (step.value < totalSteps) {
     step.value++
+    authStore.setOnboardingStep(step.value)
   } else {
     try {
       // 1. Complete Profile

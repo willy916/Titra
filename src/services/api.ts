@@ -1,6 +1,6 @@
 import axios, { type InternalAxiosRequestConfig, type AxiosResponse, type AxiosError } from 'axios'
 
-const API_URL = 'http://127.0.0.1:8083'
+const API_URL = 'http://213.199.54.136:8083'
 
 const api = axios.create({
     baseURL: API_URL,
