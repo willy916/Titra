@@ -65,7 +65,7 @@ export const useAuthStore = defineStore('auth', () => {
         otpCode,
       })
 
-      const { data, isNewUser } = response.data.body
+      const data = response.data.body.data || response.data.body
 
       if (data.accessToken) {
         localStorage.setItem('accessToken', data.accessToken)
@@ -78,7 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
       const apiUser = data.user
       // Note: Use partial data or fallback to mock defaults if fields are missing from backend yet
       const mappedUser: User = {
-        ...mockUser, // Fallback for fields not yet in API or different structure
+        ...(data.user || {}), // Use backend data as base
         id: apiUser.id,
         phone: apiUser.phoneNumber || '',
         name: apiUser.name || '',
@@ -89,7 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
       setUser(mappedUser)
       localStorage.setItem('user', JSON.stringify(mappedUser))
 
-      return { ...response.data, isNewUser }
+      return response.data
     } catch (error) {
       console.error('Verify OTP error:', error)
       throw error
