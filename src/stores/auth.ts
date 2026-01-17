@@ -65,7 +65,8 @@ export const useAuthStore = defineStore('auth', () => {
         otpCode,
       })
 
-      const { data, isNewUser } = response.data.body
+      const responseData = response.data.body || response.data
+      const { data, isNewUser } = responseData
 
       if (data.accessToken) {
         localStorage.setItem('accessToken', data.accessToken)
@@ -76,14 +77,36 @@ export const useAuthStore = defineStore('auth', () => {
 
       // Transform API user to app User type
       const apiUser = data.user
-      // Note: Use partial data or fallback to mock defaults if fields are missing from backend yet
+
+      // Role mapping helper
+      const mapApiRoleToSlug = (roleName: string): UserRole => {
+        const mapping: Record<string, UserRole> = {
+          'Paysan / Producteur': 'farmer',
+          'Transformateur': 'processor',
+          'Commerçant': 'merchant',
+          'Transporteur': 'transporter',
+          'Consommateur': 'consumer',
+          'Formation': 'independent',
+          'Coopérative': 'cooperative',
+          'Association': 'association',
+          'Union': 'union',
+          'Fédération': 'federation',
+          'Interprofession': 'interprofession',
+          'Interprofessionnalité': 'interprofession'
+        }
+        return mapping[roleName] || 'farmer'
+      }
+
+      const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : null
+
       const mappedUser: User = {
-        ...mockUser, // Fallback for fields not yet in API or different structure
+        ...apiUser,
         id: apiUser.id,
         phone: apiUser.phoneNumber || '',
         name: apiUser.name || '',
-        role: (apiUser.roleActor as UserRole) || null,
-        verified: apiUser.verified
+        role: roleSlug,
+        verified: apiUser.verified,
+        onboardingCompleted: apiUser.completed || false
       } as User
 
       setUser(mappedUser)
