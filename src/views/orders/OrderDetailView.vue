@@ -1,35 +1,57 @@
 <script setup lang="ts">
-import { ArrowLeft, MapPin, Phone, MessageSquare, Package, Truck, CheckCircle, Clock, XCircle } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { ArrowLeft, MapPin, Phone, MessageSquare, Package, Truck, CheckCircle, Clock, XCircle, Loader2, Wallet } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Avatar from '@/components/ui/Avatar.vue'
-import type { Order } from '@/types'
+import { useOrderStore } from '@/stores/order'
+import { toast } from 'vue-sonner'
 
-const props = defineProps<{ order: Order; userRole: string }>()
+const props = defineProps<{ order: any; userRole: string }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string, data?: any] }>()
 
+const orderStore = useOrderStore()
+const isLoading = ref(false)
+const orderDetails = ref<any>(null)
+
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  pending: { label: 'Paiement confirmé', color: 'bg-secondary', icon: Clock },
-  confirmed: { label: 'Confirmé', color: 'bg-secondary', icon: CheckCircle },
-  preparing: { label: 'En préparation', color: 'bg-secondary', icon: Package },
-  in_delivery: { label: 'En livraison', color: 'bg-accent', icon: Truck },
-  delivered: { label: 'Livré', color: 'bg-success', icon: CheckCircle },
-  cancelled: { label: 'Annulé', color: 'bg-destructive', icon: XCircle },
+  'EN_PREPARATION': { label: 'En préparation', color: 'bg-amber-500', icon: Package },
+  'EN_COURS': { label: 'En cours de livraison', color: 'bg-blue-500', icon: Truck },
+  'LIVREE': { label: 'Livrée', color: 'bg-green-600', icon: CheckCircle },
+  'ANNULEE': { label: 'Annulée', color: 'bg-destructive', icon: XCircle },
 }
 
-const status = statusConfig[props.order.status]
+async function fetchDetails() {
+  isLoading.value = true
+  try {
+    const data = await orderStore.fetchOrderDetails(props.order.id)
+    orderDetails.value = data
+  } catch (error) {
+    console.error('Error fetching order details:', error)
+    toast.error('Erreur lors du chargement des détails')
+    // Fallback to prop data if API fails but we have basic info
+    orderDetails.value = props.order
+  } finally {
+    isLoading.value = false
+  }
+}
 
-const timeline = [
-  { status: 'Commande passée', date: props.order.date, completed: true },
-  { status: 'Paiement confirmé', date: new Date(props.order.date.getTime() + 1000 * 60 * 5), completed: true },
-  { status: 'En préparation', date: new Date(props.order.date.getTime() + 1000 * 60 * 60), completed: props.order.status !== 'pending' },
-  { status: 'En livraison', date: null, completed: props.order.status === 'in_delivery' || props.order.status === 'delivered' },
-  { status: 'Livré', date: null, completed: props.order.status === 'delivered' },
-]
+onMounted(() => {
+  if (props.order?.id) {
+    fetchDetails()
+  } else {
+    orderDetails.value = props.order
+  }
+})
+
+const getStatus = (statusStr: string) => {
+  return statusConfig[statusStr] || { label: statusStr, color: 'bg-muted', icon: Clock }
+}
 
 function getInitials(name: string) {
-  return name.split(' ').map(n => n[0]).join('')
+  if (!name) return '?'
+  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 }
 </script>
 
@@ -43,120 +65,133 @@ function getInitials(name: string) {
       </button>
     </div>
 
-    <div class="p-6 space-y-6">
+    <!-- Loading -->
+    <div v-if="isLoading" class="flex flex-col items-center justify-center p-12">
+      <Loader2 class="w-10 h-10 text-primary animate-spin mb-4" />
+      <p class="text-muted-foreground">Chargement des détails...</p>
+    </div>
+
+    <div v-else-if="orderDetails" class="p-6 space-y-6">
       <!-- Order Status -->
       <Card class="p-4">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <p class="font-semibold text-lg">{{ order.orderNumber }}</p>
-            <p class="text-sm text-muted-foreground">{{ order.date.toLocaleDateString('fr-FR') }}</p>
+            <p class="font-semibold text-lg text-primary">{{ orderDetails.orderNumber }}</p>
+            <p class="text-xs text-muted-foreground">
+              {{ new Date(orderDetails.orderDate || Date.now()).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) }}
+            </p>
           </div>
-          <Badge :class="[status.color, 'text-white']">{{ status.label }}</Badge>
+          <Badge :class="`${getStatus(orderDetails.orderStatus).color} text-white border-0 shadow-sm`">
+            <component :is="getStatus(orderDetails.orderStatus).icon" class="w-3 h-3 mr-1" />
+            {{ getStatus(orderDetails.orderStatus).label }}
+          </Badge>
         </div>
 
-        <!-- Timeline -->
-        <div class="space-y-3">
-          <div v-for="(step, index) in timeline" :key="index" class="flex items-start gap-3">
-            <div class="flex flex-col items-center">
-              <div :class="['w-3 h-3 rounded-full', step.completed ? 'bg-primary' : 'bg-muted']" />
-              <div v-if="index < timeline.length - 1" :class="['w-0.5 h-8', step.completed ? 'bg-primary' : 'bg-muted']" />
+        <!-- Progress -->
+        <div class="pt-4 border-t border-dashed">
+            <div class="flex items-center gap-3">
+                <div :class="`w-8 h-8 rounded-full flex items-center justify-center ${getStatus(orderDetails.orderStatus).color} text-white shadow-lg animate-pulse`">
+                    <component :is="getStatus(orderDetails.orderStatus).icon" class="w-4 h-4" />
+                </div>
+                <div>
+                    <p class="font-medium text-sm">Statut actuel: {{ getStatus(orderDetails.orderStatus).label }}</p>
+                    <p class="text-xs text-muted-foreground">Dernière mise à jour: Aujourd'hui</p>
+                </div>
             </div>
-            <div class="flex-1 -mt-0.5">
-              <p :class="['text-sm', step.completed ? 'font-medium' : 'text-muted-foreground']">{{ step.status }}</p>
-              <p v-if="step.date && step.completed" class="text-xs text-muted-foreground">
-                {{ step.date.toLocaleDateString('fr-FR') }} à {{ step.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }}
-              </p>
-            </div>
-          </div>
         </div>
       </Card>
 
       <!-- Products -->
       <div>
-        <h3 class="mb-3">Produits ({{ order.items.length }})</h3>
-        <Card class="divide-y">
-          <div v-for="item in order.items" :key="item.product.id" class="p-4 flex gap-4">
-            <div class="w-16 h-16 bg-muted rounded-lg overflow-hidden">
-              <img :src="item.product.images[0]" :alt="item.product.name" class="w-full h-full object-cover" />
+        <h3 class="font-semibold mb-3 flex items-center gap-2">
+            <Package class="w-4 h-4 text-primary" />
+            Détails du produit
+        </h3>
+        <Card class="p-4">
+          <div class="flex gap-4">
+            <div class="w-20 h-20 bg-muted rounded-xl overflow-hidden shadow-inner shrink-0">
+              <img 
+                :src="orderDetails.product?.photos?.[0] || 'https://images.unsplash.com/photo-1586771107445-d3ca888129ee?w=400&h=400&fit=crop'" 
+                :alt="orderDetails.product?.nom" 
+                class="w-full h-full object-cover" 
+              />
             </div>
-            <div class="flex-1">
-              <p class="font-medium">{{ item.product.name }}</p>
-              <p class="text-sm text-muted-foreground">{{ item.quantity }} x {{ item.price.toLocaleString() }} FCFA</p>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-gray-900 truncate">{{ orderDetails.product?.nom || 'Produit sans nom' }}</p>
+              <p class="text-xs text-muted-foreground mb-2">{{ orderDetails.product?.categorie }}</p>
+              <div class="flex justify-between items-end">
+                <div class="text-sm">
+                    <span class="text-muted-foreground">Quantité:</span>
+                    <span class="font-medium ml-1">{{ orderDetails.quantity }} {{ orderDetails.product?.unite || 'unité(s)' }}</span>
+                </div>
+                <p class="font-bold text-primary">{{ orderDetails.totalAmount?.toLocaleString() }} F</p>
+              </div>
             </div>
-            <p class="font-semibold">{{ (item.quantity * item.price).toLocaleString() }} FCFA</p>
           </div>
         </Card>
       </div>
 
-      <!-- Seller/Buyer Info -->
+      <!-- Buyer Info -->
       <div>
-        <h3 class="mb-3">{{ userRole === 'consumer' ? 'Vendeur' : 'Acheteur' }}</h3>
+        <h3 class="font-semibold mb-3 flex items-center gap-2">
+            <CheckCircle class="w-4 h-4 text-primary" />
+            Informations client
+        </h3>
         <Card class="p-4">
           <div class="flex items-center gap-3">
-            <Avatar :fallback="getInitials(userRole === 'consumer' ? order.seller.name : order.buyer?.name || '')" class="w-12 h-12" />
+            <Avatar :fallback="getInitials(orderDetails.buyerName || 'Client')" class="w-12 h-12 border-2 border-primary/10" />
             <div class="flex-1">
-              <p class="font-medium">{{ userRole === 'consumer' ? order.seller.name : order.buyer?.name }}</p>
+              <p class="font-bold text-gray-900">{{ orderDetails.buyerName || 'Client' }}</p>
               <div class="flex items-center gap-2 mt-1">
                 <MapPin class="w-3 h-3 text-muted-foreground" />
-                <span class="text-xs text-muted-foreground">Abidjan</span>
+                <span class="text-xs text-muted-foreground">Côte d'Ivoire</span>
               </div>
             </div>
             <div class="flex gap-2">
-              <Button size="icon" variant="outline" @click="emit('navigate', 'chat', { user: userRole === 'consumer' ? order.seller : order.buyer })">
-                <MessageSquare class="w-4 h-4" />
+              <Button size="icon" variant="outline" class="rounded-full h-10 w-10 hover:bg-primary/5">
+                <MessageSquare class="w-4 h-4 text-primary" />
               </Button>
-              <Button size="icon" variant="outline">
-                <Phone class="w-4 h-4" />
+              <Button size="icon" variant="outline" class="rounded-full h-10 w-10 hover:bg-primary/5">
+                <Phone class="w-4 h-4 text-primary" />
               </Button>
             </div>
           </div>
         </Card>
       </div>
 
-      <!-- Delivery Address -->
-      <div>
-        <h3 class="mb-3">Adresse de livraison</h3>
-        <Card class="p-4">
-          <div class="flex items-start gap-3">
-            <MapPin class="w-5 h-5 text-muted-foreground mt-0.5" />
-            <div>
-              <p class="font-medium">{{ order.deliveryAddress }}</p>
-              <p class="text-sm text-muted-foreground mt-1">{{ order.paymentMethod }}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <!-- Order Summary -->
-      <Card class="p-4">
-        <h3 class="mb-4">Récapitulatif</h3>
-        <div class="space-y-2">
+      <!-- Summary -->
+      <Card class="p-5 bg-primary/5 border-primary/10">
+        <h3 class="font-bold mb-4 flex items-center gap-2">
+            <Wallet class="w-4 h-4 text-primary" />
+            Récapitulatif financier
+        </h3>
+        <div class="space-y-3">
           <div class="flex justify-between text-sm">
+            <span class="text-muted-foreground">Prix unitaire</span>
+            <span class="font-medium">{{ orderDetails.unitPrice?.toLocaleString() }} F</span>
+          </div>
+          <div class="flex justify-between text-sm pt-2 border-t border-primary/10">
             <span class="text-muted-foreground">Sous-total</span>
-            <span>{{ order.total.toLocaleString() }} FCFA</span>
+            <span class="font-medium">{{ (Number(orderDetails.unitPrice || 0) * Number(orderDetails.quantity || 0))?.toLocaleString() }} F</span>
           </div>
           <div class="flex justify-between text-sm">
-            <span class="text-muted-foreground">Frais de livraison</span>
-            <span>0 FCFA</span>
+            <span class="text-muted-foreground">Frais de plateforme</span>
+            <span class="text-destructive font-medium">- 0 F</span>
           </div>
-          <div class="flex justify-between text-sm">
-            <span class="text-muted-foreground">Commission TITRA (5%)</span>
-            <span>{{ Math.round(order.total * 0.05).toLocaleString() }} FCFA</span>
-          </div>
-          <div class="border-t pt-2 mt-2">
-            <div class="flex justify-between font-semibold">
-              <span>Total</span>
-              <span class="text-primary">{{ order.total.toLocaleString() }} FCFA</span>
+          <div class="border-t border-primary/20 pt-3 mt-2">
+            <div class="flex justify-between items-center font-bold">
+              <span class="text-gray-900">Total à percevoir</span>
+              <span class="text-xl text-primary">{{ orderDetails.totalAmount?.toLocaleString() }} FCFA</span>
             </div>
           </div>
         </div>
       </Card>
 
       <!-- Actions -->
-      <div v-if="order.status !== 'delivered' && order.status !== 'cancelled'" class="flex gap-3">
-        <Button variant="outline" class="flex-1">Signaler un problème</Button>
-        <Button v-if="userRole !== 'consumer' && order.status === 'preparing'" class="flex-1 bg-primary">
-          Marquer comme expédié
+      <div v-if="orderDetails.orderStatus === 'EN_PREPARATION' || orderDetails.orderStatus === 'EN_COURS'" class="flex gap-3 pt-4">
+        <Button variant="outline" class="flex-1 h-12">Annuler</Button>
+        <Button class="flex-1 bg-primary h-12 shadow-lg shadow-primary/20">
+          {{ orderDetails.orderStatus === 'EN_PREPARATION' ? 'Passer en livraison' : 'Confirmer la livraison' }}
         </Button>
       </div>
     </div>

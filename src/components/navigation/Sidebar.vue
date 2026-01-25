@@ -9,6 +9,7 @@ const props = defineProps<{
   activeScreen: string
   role: string
   userName: string
+  userPhoto?: string
   userMatricule?: string
   cartCount?: number
 }>()
@@ -63,7 +64,10 @@ const financialItems = computed((): NavItem[] => {
 
     <div class="p-4 border-b border-border">
       <button @click="emit('navigate', 'profile')" class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-        <div class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center"><User class="w-5 h-5 text-primary" /></div>
+        <div class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden border border-primary/20">
+          <img v-if="userPhoto" :src="userPhoto" :alt="userName" class="w-full h-full object-cover" />
+          <User v-else class="w-5 h-5 text-primary" />
+        </div>
         <div class="flex-1 text-left min-w-0">
           <p class="font-medium truncate">{{ userName }}</p>
           <Badge variant="secondary" class="text-xs mt-1">{{ getRoleLabel(role) }}</Badge>

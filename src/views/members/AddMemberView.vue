@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ArrowLeft, UserPlus, Building2, Landmark, Briefcase, User, Tractor, Sprout, Users } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useCooperativeStore } from '@/stores/cooperative'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
@@ -20,7 +21,17 @@ const memberType = ref('')
 
 // Formulaires
 const farmerFormData = ref({
-  firstName: '', lastName: '', phone: '', location: '', village: '', filiere: '', products: [] as string[], surfaceArea: '', photo: ''
+  firstName: '', 
+  lastName: '', 
+  phone: '', 
+  location: '', 
+  village: '', 
+  filiere: '', 
+  products: [] as string[], 
+  surfaceArea: '', 
+  photo: '',
+  typeActivite: 'AGRICULTURE_CULTURE',
+  memberType: 'PRODUCTEUR'
 })
 
 const structureFormData = ref({
@@ -28,10 +39,10 @@ const structureFormData = ref({
 })
 
 const teamMemberFormData = ref({
-  name: '', phone: '', email: '', role: 'secretaire'
+  name: '', phone: '', email: '', role: 'MANAGER'
 })
 
-// Types de membres selon le rôle
+// ... roles mapping ...
 const memberTypeOptions = computed(() => {
   switch (props.userRole) {
     case 'interprofession':
@@ -58,9 +69,9 @@ const memberTypeOptions = computed(() => {
     case 'association':
     default:
       return [
-        { value: 'producteur', label: 'Producteur', icon: Tractor, description: 'Producteur agricole avec exploitation' },
-        { value: 'paysan', label: 'Paysan', icon: Sprout, description: 'Petit exploitant agricole' },
-        { value: 'eleveur', label: 'Éleveur', icon: User, description: 'Éleveur de bétail ou volaille' },
+        { value: 'PRODUCTEUR', label: 'Producteur', icon: Tractor, description: 'Producteur agricole avec exploitation' },
+        { value: 'PAYSAN', label: 'Paysan', icon: Sprout, description: 'Petit exploitant agricole' },
+        { value: 'ELEVEUR', label: 'Éleveur', icon: User, description: 'Éleveur de bétail ou volaille' },
         { value: 'team_member', label: 'Membre de l\'équipe', icon: Users, description: 'Équipe de direction' },
       ]
   }
@@ -68,12 +79,12 @@ const memberTypeOptions = computed(() => {
 
 const isAddingStructure = computed(() => ['federation', 'union', 'cooperative', 'association'].includes(memberType.value))
 const isAddingTeamMember = computed(() => memberType.value === 'team_member')
-const isAddingFarmer = computed(() => ['producteur', 'paysan', 'eleveur'].includes(memberType.value))
+const isAddingFarmer = computed(() => ['PRODUCTEUR', 'PAYSAN', 'ELEVEUR'].includes(memberType.value))
 const isAddingStrategicActor = computed(() => memberType.value === 'strategic_actor')
 
 const progress = computed(() => memberType.value ? (step.value / 2) * 100 : 0)
 
-const products = ['Igname', 'Manioc', 'Banane Plantain', 'Riz', 'Maïs', 'Tomate', 'Oignon', 'Piment', 'Gombo', 'Aubergine']
+const products = ['Cacao Grade A', 'Cacao Grade B', 'Café Arabica', 'Café Robusta', 'Anacarde', 'Manioc', 'Maïs', 'Riz']
 
 const toggleProduct = (product: string) => {
   const idx = farmerFormData.value.products.indexOf(product)
@@ -82,11 +93,12 @@ const toggleProduct = (product: string) => {
 }
 
 const roleOptions = [
-  { value: 'secretaire', label: 'Secrétaire' },
-  { value: 'tresorier', label: 'Trésorier' },
-  { value: 'charge_ventes', label: 'Chargé des ventes' },
-  { value: 'responsable_stock', label: 'Responsable stock' },
-  { value: 'comptable', label: 'Comptable' },
+  { value: 'PRESIDENT', label: 'Président' },
+  { value: 'MANAGER', label: 'Manager / Directeur' },
+  { value: 'ACCOUNTANT', label: 'Comptable' },
+  { value: 'SECRETAIRE', label: 'Secrétaire' },
+  { value: 'TRESORIER', label: 'Trésorier' },
+  { value: 'MEMBRE', label: 'Membre' },
 ]
 
 const structureTypes = [
@@ -96,19 +108,24 @@ const structureTypes = [
   { value: 'federation', label: 'Fédération' },
 ]
 
+const activityTypeOptions = [
+  { value: 'AGRICULTURE_CULTURE', label: 'Agriculture / Culture' },
+  { value: 'ELEVAGE', label: 'Élevage' },
+  { value: 'MIXTE', label: 'Mixte (Culture + Élevage)' },
+  { value: 'AUTRE', label: 'Autre' },
+]
+
 const authStore = useAuthStore()
+const cooperativeStore = useCooperativeStore()
 const apiFilieres = ref<any[]>([])
 const filiereOptions = computed(() => {
   if (apiFilieres.value.length === 0) return [
-    { value: 'vivrier', label: 'Cultures vivrières' },
-    { value: 'maraichage', label: 'Maraîchage' },
-    { value: 'cacao', label: 'Cacao' },
-    { value: 'cafe', label: 'Café' },
-    { value: 'anacarde', label: 'Anacarde' },
-    { value: 'hevea', label: 'Hévéa' },
-    { value: 'palmier', label: 'Palmier à huile' },
+    { value: 'CACAO', label: 'Cacao' },
+    { value: 'CAFE', label: 'Café' },
+    { value: 'ANACARDE', label: 'Anacarde' },
+    { value: 'VIVRIER', label: 'Cultures vivrières' },
   ]
-  return apiFilieres.value.map(f => ({ value: f.id, label: f.libelle }))
+  return apiFilieres.value.map(f => ({ value: f.libelle.toUpperCase(), label: f.libelle }))
 })
 
 onMounted(async () => {
@@ -119,16 +136,106 @@ onMounted(async () => {
   }
 })
 
-const handleSubmit = () => {
-  if (isAddingFarmer.value) {
-    const name = `${farmerFormData.value.firstName} ${farmerFormData.value.lastName}`
-    toast.success(`${name} a été enregistré avec succès !`, { description: 'Un SMS avec son matricule TITRA lui sera envoyé.' })
-  } else if (isAddingStructure.value) {
-    toast.success(`${structureFormData.value.name} a été enregistrée !`, { description: 'La structure peut maintenant rejoindre TITRA.' })
-  } else if (isAddingTeamMember.value) {
-    toast.success(`${teamMemberFormData.value.name} a été ajouté à l'équipe !`)
+const formatPhoneToIvoryCoast = (phone: string) => {
+  // Remove all non-digit characters
+  let cleaned = phone.replace(/\D/g, '')
+  
+  // If it starts with 225, remove it to get the local 10 digits
+  if (cleaned.startsWith('225')) {
+    cleaned = cleaned.substring(3)
   }
-  emit('navigate', 'members')
+  
+  // Return format: +225XXXXXXXXXX (no spaces)
+  return `+225${cleaned}`
+}
+
+const isPhoneLengthValid = (phone: string) => {
+  const cleaned = phone.replace(/\D/g, '').replace(/^225/, '')
+  return cleaned.length === 10
+}
+
+const handleSubmit = async () => {
+  const currentPhone = isAddingFarmer.value ? farmerFormData.value.phone : 
+                       (isAddingTeamMember.value ? teamMemberFormData.value.phone : structureFormData.value.phone)
+
+  if (!isPhoneLengthValid(currentPhone)) {
+    toast.error('Format de téléphone invalide', {
+      description: 'Le numéro doit contenir 10 chiffres (ex: 07 01 02 03 04)'
+    })
+    return
+  }
+
+  try {
+    if (isAddingFarmer.value) {
+      const response = await cooperativeStore.registerMember({
+        firstName: farmerFormData.value.firstName,
+        lastName: farmerFormData.value.lastName,
+        phoneNumber: formatPhoneToIvoryCoast(farmerFormData.value.phone),
+        village: farmerFormData.value.village,
+        region: farmerFormData.value.location,
+        mainFiliere: farmerFormData.value.filiere,
+        produits: farmerFormData.value.products,
+        surfaceCultivee: parseFloat(farmerFormData.value.surfaceArea) || 0,
+        typeActivite: farmerFormData.value.typeActivite,
+        memberType: memberType.value
+      })
+      const matricule = response.body || response.data || response.matricule || 'Généré'
+      toast.success('Producteur enregistré !', { description: `Matricule généré : ${matricule}` })
+    } else if (isAddingTeamMember.value) {
+      await cooperativeStore.registerTeamMember({
+        fullName: teamMemberFormData.value.name,
+        phoneNumber: formatPhoneToIvoryCoast(teamMemberFormData.value.phone),
+        email: teamMemberFormData.value.email,
+        role: teamMemberFormData.value.role
+      })
+      toast.success(`${teamMemberFormData.value.name} a été ajouté à l'équipe !`)
+    } else if (isAddingStructure.value) {
+      // Logic for Institutions (Federation/Union/InterPro) adding a sub-structure
+      const typeMapping: Record<string, string> = {
+        'strategic': 'STRATEGIC_ACTOR',
+        'federation': 'FEDERATION',
+        'union': 'UNION',
+        'cooperative': 'COOPERATIVE',
+        'association': 'ASSOCIATION'
+      }
+      
+      await cooperativeStore.registerMember({
+        // For structure registration, we pass structureType to route correctly in store
+        structureType: typeMapping[structureFormData.value.type] || structureFormData.value.type.toUpperCase(),
+        
+        name: structureFormData.value.name,
+        presidentName: structureFormData.value.president,
+        phoneNumber: formatPhoneToIvoryCoast(structureFormData.value.phone),
+        contactPhone: formatPhoneToIvoryCoast(structureFormData.value.phone),
+        email: structureFormData.value.email, // Some endpoints use email directly
+        contactEmail: structureFormData.value.email,
+        siegeVille: structureFormData.value.location,
+        location: structureFormData.value.location, // Fallback
+        zoneCouverture: structureFormData.value.location || 'Région Nationale',
+        agrement: structureFormData.value.legalNumber,
+        creationYear: parseInt(structureFormData.value.creationYear) || new Date().getFullYear(),
+        numberOfMembers: parseInt(structureFormData.value.memberCount) || 0
+      })
+      toast.success(`${structureFormData.value.name} a été enregistrée avec succès !`)
+    }
+    emit('navigate', 'members')
+  } catch (error: any) {
+    console.error('Error during registration:', error)
+    
+    // Extract validation errors from Spring Boot response
+    const responseData = error.response?.data
+    if (responseData?.errors && Array.isArray(responseData.errors)) {
+      responseData.errors.forEach((err: any) => {
+        toast.error(err.defaultMessage || 'Erreur de validation', {
+          description: `Champ: ${err.field}`
+        })
+      })
+    } else if (responseData?.message) {
+      toast.error(responseData.message)
+    } else {
+      toast.error("Erreur lors de l'enregistrement. Veuillez vérifier les informations.")
+    }
+  }
 }
 </script>
 
@@ -255,6 +362,11 @@ const handleSubmit = () => {
 
         <!-- Step 2: Agricultural Info -->
         <div v-if="step === 2" class="space-y-4">
+          <div class="space-y-2">
+            <Label>Type d'activité *</Label>
+            <Select v-model="farmerFormData.typeActivite" :options="activityTypeOptions" placeholder="Sélectionnez le type d'activité" />
+          </div>
+
           <div class="space-y-2">
             <Label>Filière principale *</Label>
             <Select v-model="farmerFormData.filiere" :options="filiereOptions" placeholder="Sélectionnez la filière" />

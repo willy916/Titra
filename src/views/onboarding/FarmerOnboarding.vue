@@ -112,8 +112,18 @@ async function handleNext() {
       
       toast.success('Profil complété avec succès !')
       emit('complete', formData.value)
-    } catch (error) {
-      toast.error('Une erreur est survenue lors de la création de votre profil')
+    } catch (error: any) {
+      console.error('Registration error:', error)
+      const responseData = error.response?.data
+      if (responseData?.errors && Array.isArray(responseData.errors)) {
+        responseData.errors.forEach((err: any) => {
+          toast.error(err.defaultMessage || 'Erreur de validation')
+        })
+      } else if (responseData?.message) {
+        toast.error(responseData.message)
+      } else {
+        toast.error('Une erreur est survenue lors de la création de votre profil')
+      }
     }
   }
 }

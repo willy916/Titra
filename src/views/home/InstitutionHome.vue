@@ -1,15 +1,29 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Bell, Plus, TrendingUp, Wallet, Package, Users, Settings, Store, Calculator, GraduationCap, BarChart3 } from 'lucide-vue-next'
+import { Bell, Plus, TrendingUp, Wallet, Package, Users, Settings, Store, Calculator, GraduationCap, BarChart3, UserPlus, Loader2 } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
+import type { User } from '@/types'
+import { usePaysanStore } from '@/stores/paysan'
 
-interface User { name: string; role: string; balance?: number }
 const props = defineProps<{ user: User }>()
 const emit = defineEmits<{ navigate: [screen: string] }>()
 
+const paysanStore = usePaysanStore()
 const isLoading = ref(true)
-onMounted(() => { setTimeout(() => isLoading.value = false, 1000) })
+
+onMounted(async () => { 
+  try {
+    await Promise.all([
+      paysanStore.fetchDashboardStats(),
+      paysanStore.fetchActivities()
+    ])
+  } catch (error) {
+    console.error('Failed to load institution dashboard:', error)
+  } finally {
+    isLoading.value = false 
+  }
+})
 
 const displayName = computed(() => {
   const role = props.user.role as string
@@ -30,67 +44,70 @@ const getRoleLabel = () => {
 }
 
 const stats = computed(() => {
-  if (props.user.role === 'interprofession') return [
-    { label: 'Structures membres', value: '78', icon: Users, description: 'Fédérations, Unions, Coopératives, Associations' },
-    { label: 'Produits vendus', value: '324', icon: Package, description: 'Vendus ce mois sur la marketplace' },
-    { label: 'Commissions du mois', value: '18.5M FCFA', icon: TrendingUp, description: '1% sur toutes les transactions' },
-    { label: 'Volume transactionnel', value: '1.8Mds FCFA', icon: Wallet, description: 'Total des transactions de la filière' },
-  ]
+  const data = paysanStore.stats || { 
+    membresActifs: 0, 
+    produitsVendusCeMois: 0, 
+    commissionsTotal: 0, 
+    soldeDisponible: 0 
+  }
+
+  if (props.user.role === 'interprofession') {
+    return [
+      { label: 'Structures membres', value: data.membresActifs?.toString() || '0', icon: Users, description: 'Structures affiliées' },
+      { label: 'Produits vendus', value: data.produitsVendusCeMois?.toString() || '0', icon: Package, description: 'Volumes de la filière' },
+      { label: 'Commissions', value: `${(data.commissionsTotal || 0).toLocaleString()} F`, icon: TrendingUp, description: 'Prélèvement filière' },
+      { label: 'Flux financier', value: `${(data.soldeDisponible || 0).toLocaleString()} F`, icon: Wallet, description: 'Volume de transaction' },
+    ]
+  }
+  
   return [
-    { label: 'Membres actifs', value: '156', icon: Users, description: 'Producteurs enregistrés' },
-    { label: 'Produits vendus', value: '248', icon: Package, description: 'Vendus ce mois' },
-    { label: 'Commissions des membres', value: '2.4M FCFA', icon: TrendingUp, description: 'Revenus sur ventes membres' },
-    { label: 'Solde disponible', value: `${(props.user.balance || 0).toLocaleString()} FCFA`, icon: Wallet, description: 'Disponible pour retrait' },
+    { label: 'Membres actifs', value: data.membresActifs?.toString() || '0', icon: Users, description: 'Producteurs actifs' },
+    { label: 'Produits vendus', value: data.produitsVendusCeMois?.toString() || '0', icon: Package, description: 'Vendus ce mois' },
+    { label: 'Commissions', value: `${(data.commissionsTotal || 0).toLocaleString()} F`, icon: TrendingUp, description: 'Revenus générés' },
+    { label: 'Solde disponible', value: `${(data.soldeDisponible || props.user.balance || 0).toLocaleString()} F`, icon: Wallet, description: 'Disponible pour retrait' },
   ]
 })
 
 const quickActions = [
-  { label: 'Gérer les membres', icon: Users, screen: 'members', variant: 'default' as const },
+  { label: 'Enregistrer membre', icon: UserPlus, screen: 'add-member', variant: 'default' as const },
+  { label: 'Gérer les membres', icon: Users, screen: 'members', variant: 'outline' as const },
   { label: 'Ajouter un produit', icon: Plus, screen: 'add-product', variant: 'outline' as const },
-  { label: 'Voir nos produits', icon: Package, screen: 'my-products', variant: 'outline' as const },
   { label: 'Statistiques', icon: BarChart3, screen: 'stats', variant: 'outline' as const },
   { label: 'Ma Comptabilité', icon: Calculator, screen: 'accounting', variant: 'outline' as const },
   { label: 'Formation', icon: GraduationCap, screen: 'training', variant: 'outline' as const },
 ]
 
-const getRecentActivities = () => {
-  if (props.user.role === 'interprofession') return [
-    { id: '1', type: 'new_structure', member: 'Fédération Nationale du Cacao', description: 'Nouvelle fédération enregistrée', time: 'Il y a 3h' },
-    { id: '2', type: 'member_sale', member: 'SCOOP-CA Agnibilékrou', description: 'Vente de 2 tonnes d\'anacarde - Commission: 125,000 FCFA', time: 'Il y a 5h', amount: 125000 },
-    { id: '3', type: 'strategic_actor', member: 'SACO Export', description: 'Nouvel acteur stratégique (Exportateur)', time: 'Il y a 1j' },
-    { id: '4', type: 'member_sale', member: 'Union des Producteurs du Sud', description: 'Transaction café - Commission: 85,000 FCFA', time: 'Il y a 1j', amount: 85000 },
-  ]
-  if (props.user.role === 'federation') return [
-    { id: '1', type: 'union_sale', member: 'Union des Producteurs du Sud', description: 'Vente de 1.5 tonnes de café - Commission: 95,000 FCFA', time: 'Il y a 2h', amount: 95000 },
-    { id: '2', type: 'union_sale', member: 'Union des Planteurs de Cacao', description: 'Vente de 3 tonnes de cacao - Commission: 180,000 FCFA', time: 'Il y a 4h', amount: 180000 },
-    { id: '3', type: 'new_union', member: 'Union Régionale de l\'Ouest', description: 'Nouvelle union enregistrée dans la fédération', time: 'Il y a 1j' },
-    { id: '4', type: 'union_sale', member: 'Union des Coopératives du Centre', description: 'Vente d\'anacarde - Commission: 65,000 FCFA', time: 'Il y a 1j', amount: 65000 },
-  ]
-  if (props.user.role === 'union') return [
-    { id: '1', type: 'coop_sale', member: 'SCOOP-CA Agnibilékrou', description: 'Vente de 800kg d\'anacarde - Commission: 45,000 FCFA', time: 'Il y a 1h', amount: 45000 },
-    { id: '2', type: 'asso_sale', member: 'Association Femmes Agricultrices', description: 'Vente de produits bio - Commission: 28,000 FCFA', time: 'Il y a 3h', amount: 28000 },
-    { id: '3', type: 'coop_sale', member: 'Coopérative des Planteurs de Café', description: 'Vente de 1.2 tonnes de café - Commission: 75,000 FCFA', time: 'Il y a 5h', amount: 75000 },
-    { id: '4', type: 'new_structure', member: 'Association Jeunes Agriculteurs', description: 'Nouvelle association enregistrée dans l\'union', time: 'Il y a 1j' },
-  ]
-  return [
-    { id: '1', type: 'member_sale', member: 'Kouadio Jean', description: 'Vente de cacao - Commission: 15,000 FCFA', time: 'Il y a 2h', amount: 15000 },
-    { id: '2', type: 'new_member', member: 'Aminata Traoré', description: 'Nouveau membre inscrit', time: 'Il y a 5h' },
-    { id: '3', type: 'institution_sale', description: 'Vente directe de café - 500kg', time: 'Il y a 1j', amount: 750000 },
-    { id: '4', type: 'member_sale', member: 'Yao Koffi', description: 'Vente d\'igname - Commission: 8,000 FCFA', time: 'Il y a 2j', amount: 8000 },
-  ]
-}
-const recentActivities = getRecentActivities()
+const topSellers = computed(() => {
+  return (paysanStore.stats?.bestSellers || []).map((s: any, index: number) => ({
+    id: s.matricule || index.toString(),
+    name: s.name,
+    matricule: s.matricule,
+    sales: s.totalSales,
+    formattedSales: s.formattedSales
+  }))
+})
+
+const recentActivities = computed(() => {
+  const activities = paysanStore.activities || []
+  return activities.map((act: any, index: number) => ({
+    id: act.id || index, 
+    type: act.type || 'member_sale', 
+    member: act.member || 'Structure/Membre', 
+    description: act.description || 'Action effectuée', 
+    time: act.time || 'Récemment', 
+    amount: act.amount
+  })).slice(0, 5)
+})
 
 function getActivityIcon(type: string) {
   if (['member_sale', 'union_sale', 'coop_sale', 'asso_sale'].includes(type)) return TrendingUp
-  if (['new_member', 'new_structure', 'new_union'].includes(type)) return Users
-  if (type === 'strategic_actor') return Package
+  if (['new_member', 'new_structure', 'new_union', 'new_coop'].includes(type)) return Users
   return Store
 }
+
 function getActivityClass(type: string) {
   if (['member_sale', 'union_sale', 'coop_sale', 'asso_sale'].includes(type)) return 'bg-success/10 text-success'
-  if (['new_member', 'new_structure', 'new_union'].includes(type)) return 'bg-primary/10 text-primary'
-  if (type === 'strategic_actor') return 'bg-accent/10 text-accent'
+  if (['new_member', 'new_structure', 'new_union', 'new_coop'].includes(type)) return 'bg-primary/10 text-primary'
   return 'bg-secondary/10 text-secondary'
 }
 </script>
@@ -144,6 +161,39 @@ function getActivityClass(type: string) {
             <span class="text-sm">{{ action.label }}</span>
           </Button>
         </div>
+      </Card>
+
+      <!-- Top Sellers -->
+      <Card class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3>Meilleurs vendeurs du mois</h3>
+          <BarChart3 class="w-5 h-5 text-muted-foreground" />
+        </div>
+        <template v-if="isLoading">
+          <div class="space-y-3">
+            <div v-for="i in 3" :key="i" class="flex gap-3 p-3 rounded-lg border animate-pulse">
+              <div class="w-8 h-8 bg-muted rounded-full"></div>
+              <div class="flex-1"><div class="h-4 bg-muted rounded w-1/2 mb-2"></div><div class="h-3 bg-muted rounded w-3/4"></div></div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-if="topSellers.length === 0" class="text-center py-6 text-muted-foreground">
+            Aucun vendeur enregistré ce mois.
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="(seller, index) in topSellers" :key="seller.id" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+              <div class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                <span class="text-primary font-medium">{{ index + 1 }}</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-medium text-sm">{{ seller.name }}</p>
+                <p class="text-xs text-muted-foreground">{{ seller.matricule }}</p>
+              </div>
+              <p class="font-semibold text-primary">{{ seller.formattedSales || `${((seller.sales || 0) / 1000).toFixed(0)}k F` }}</p>
+            </div>
+          </div>
+        </template>
       </Card>
 
       <!-- Recent Activities -->

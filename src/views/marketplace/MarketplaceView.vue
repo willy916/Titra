@@ -1,55 +1,88 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { Search, SlidersHorizontal, MapPin, Star, ArrowLeft, X } from 'lucide-vue-next'
+import { ref, computed, onMounted, watch } from 'vue'
+import { Search, SlidersHorizontal, MapPin, Star, ArrowLeft, X, Loader2 } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Input from '@/components/ui/Input.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Select from '@/components/ui/Select.vue'
-import { mockProducts } from '@/data/mockData'
+import { useMarketplaceStore } from '@/stores/marketplace'
+import { toast } from 'vue-sonner'
 
 const emit = defineEmits<{ back: []; navigate: [screen: string, data?: any] }>()
 
+const marketplaceStore = useMarketplaceStore()
 const searchQuery = ref('')
 const selectedCategory = ref('all')
 const selectedLocation = ref('all')
-const selectedSellerType = ref<string[]>([])
+const selectedSellerType = ref<string>('Tous')
 const isLoading = ref(true)
 const showFilters = ref(false)
 
-const categories = ['all', 'Tubercules', 'Fruits', 'Céréales', 'Légumes', 'Huiles']
+const categories = ['all', 'Tubercules', 'Fruits', 'Céréales', 'Légumes', 'Épices', 'Huiles']
 const locations = [
   { value: 'all', label: 'Toutes les régions' },
-  { value: 'abidjan', label: 'Abidjan' },
-  { value: 'bouake', label: 'Bouaké' },
-  { value: 'yamoussoukro', label: 'Yamoussoukro' },
+  { value: 'Abidjan', label: 'Abidjan' },
+  { value: 'Bouaké', label: 'Bouaké' },
+  { value: 'Yamoussoukro', label: 'Yamoussoukro' },
 ]
-const sellerTypes = ['Tous', 'Producteur', 'Transformateur', 'Commerçant']
+const sellerTypes = ['Tous', 'PRODUCTEUR', 'TRANSFORMATEUR', 'COMMERCANT']
 
-onMounted(() => { setTimeout(() => isLoading.value = false, 800) })
+async function loadProducts() {
+  isLoading.value = true
+  try {
+    await marketplaceStore.fetchMarketplaceProducts({
+      search: searchQuery.value,
+      categorie: selectedCategory.value === 'all' ? undefined : selectedCategory.value,
+      localisation: selectedLocation.value === 'all' ? undefined : selectedLocation.value,
+      typeVendeur: selectedSellerType.value !== 'Tous' ? selectedSellerType.value : undefined
+    })
+  } catch (error) {
+    console.error('Error loading products:', error)
+    toast.error('Erreur lors du chargement des produits')
+  } finally {
+    isLoading.value = false
+  }
+}
 
-const filteredProducts = computed(() => {
-  return mockProducts.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      product.seller.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesCategory = selectedCategory.value === 'all' || product.category === selectedCategory.value
-    return matchesSearch && matchesCategory
-  })
+onMounted(loadProducts)
+
+// Debounced search
+let searchTimeout: any
+watch(searchQuery, () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(loadProducts, 500)
+})
+
+watch([selectedCategory, selectedLocation, selectedSellerType], loadProducts)
+
+const products = computed(() => {
+  return marketplaceStore.products.map((p: any) => ({
+    id: p.id,
+    name: p.nom,
+    category: p.categorie,
+    price: p.prix,
+    unit: p.unite,
+    images: p.photos && p.photos.length > 0 ? p.photos : ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=400&fit=crop'],
+    stock: p.disponibilite,
+    location: p.localisation,
+    seller: {
+      name: p.vendeur?.nom || 'Vendeur Inconnu',
+      type: p.vendeur?.type,
+      location: p.vendeur?.localisation,
+      rating: p.vendeur?.note || 4.5,
+      cooperative: p.vendeur?.cooperative
+    },
+    type: p.type, // PAYSAN or COOPERATIVE
+    badges: p.badges || [],
+    verified: p.badges?.includes('Vérifié') || p.badges?.includes('Local') // Example logic
+  }))
 })
 
 function resetFilters() {
   selectedCategory.value = 'all'
   selectedLocation.value = 'all'
-  selectedSellerType.value = []
-}
-
-function toggleSellerType(type: string) {
-  const index = selectedSellerType.value.indexOf(type)
-  if (index > -1) {
-    selectedSellerType.value.splice(index, 1)
-  } else {
-    selectedSellerType.value.push(type)
-  }
+  selectedSellerType.value = 'Tous'
 }
 </script>
 
@@ -138,10 +171,10 @@ function toggleSellerType(type: string) {
                 <div class="space-y-2">
                   <label v-for="type in sellerTypes" :key="type" class="flex items-center gap-2 cursor-pointer">
                     <input 
-                      type="checkbox" 
-                      :checked="selectedSellerType.includes(type)" 
-                      @change="toggleSellerType(type)" 
-                      class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      type="radio" 
+                      :value="type"
+                      v-model="selectedSellerType"
+                      class="w-4 h-4 rounded-full border-gray-300 text-primary focus:ring-primary"
                     />
                     <span class="text-sm">{{ type }}</span>
                   </label>
@@ -193,10 +226,10 @@ function toggleSellerType(type: string) {
               <div class="space-y-2">
                 <label v-for="type in sellerTypes" :key="type" class="flex items-center gap-2 cursor-pointer">
                   <input 
-                    type="checkbox" 
-                    :checked="selectedSellerType.includes(type)" 
-                    @change="toggleSellerType(type)" 
-                    class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    type="radio" 
+                    :value="type"
+                    v-model="selectedSellerType"
+                    class="w-4 h-4 rounded-full border-gray-300 text-primary focus:ring-primary"
                   />
                   <span class="text-sm">{{ type }}</span>
                 </label>
@@ -211,7 +244,7 @@ function toggleSellerType(type: string) {
       <!-- Products Grid - Desktop -->
       <div class="flex-1">
         <div class="mb-4">
-          <p class="text-sm text-muted-foreground">{{ filteredProducts.length }} produit{{ filteredProducts.length > 1 ? 's' : '' }} trouvé{{ filteredProducts.length > 1 ? 's' : '' }}</p>
+          <p class="text-sm text-muted-foreground">{{ products.length }} produit{{ products.length > 1 ? 's' : '' }} trouvé{{ products.length > 1 ? 's' : '' }}</p>
         </div>
 
         <div class="grid grid-cols-3 xl:grid-cols-4 gap-4">
@@ -226,7 +259,7 @@ function toggleSellerType(type: string) {
           </template>
           <template v-else>
             <Card
-              v-for="product in filteredProducts"
+              v-for="product in products"
               :key="product.id"
               class="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
               @click="emit('navigate', 'product-detail', { product })"
@@ -261,7 +294,7 @@ function toggleSellerType(type: string) {
 
     <!-- Products - Mobile -->
     <div class="lg:hidden p-4">
-      <p class="text-sm text-muted-foreground mb-4">{{ filteredProducts.length }} produit{{ filteredProducts.length > 1 ? 's' : '' }} trouvé{{ filteredProducts.length > 1 ? 's' : '' }}</p>
+      <p class="text-sm text-muted-foreground mb-4">{{ products.length }} produit{{ products.length > 1 ? 's' : '' }} trouvé{{ products.length > 1 ? 's' : '' }}</p>
 
       <div class="grid grid-cols-2 gap-4">
         <template v-if="isLoading">
@@ -275,7 +308,7 @@ function toggleSellerType(type: string) {
         </template>
         <template v-else>
           <Card
-            v-for="product in filteredProducts"
+            v-for="product in products"
             :key="product.id"
             class="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
             @click="emit('navigate', 'product-detail', { product })"

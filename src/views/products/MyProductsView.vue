@@ -1,50 +1,123 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ArrowLeft, Plus, Package, Edit, Trash2, Eye, Grid3X3, List } from 'lucide-vue-next'
+import { ArrowLeft, Plus, Package, Edit, Trash2, Eye, Grid3X3, List, Power, Loader2 } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 
+import { useProductStore } from '@/stores/product'
+import { toast } from 'vue-sonner'
+
 const emit = defineEmits<{ back: []; navigate: [screen: string, data?: any] }>()
+const productStore = useProductStore()
 
 const isLoading = ref(true)
+const isToggling = ref<string | null>(null)
 const activeTab = ref<'active' | 'draft' | 'sold'>('active')
 const viewMode = ref<'list' | 'grid'>('list')
 
-onMounted(() => { setTimeout(() => isLoading.value = false, 1200) })
+onMounted(async () => { 
+  try {
+    await productStore.fetchMyProducts()
+  } catch (error) {
+    console.error('Error fetching products:', error)
+    toast.error('Erreur lors du chargement des produits')
+  } finally {
+    isLoading.value = false
+  }
+})
 
-// Produits avec vraies images
-const products = [
-  { id: '1', name: 'Igname Krenglè fraîche', price: 500, unit: 'kg', stock: 150, sold: 45, status: 'active', image: 'https://images.unsplash.com/photo-1590165482129-1b8b27698780?w=200&h=200&fit=crop', category: 'Tubercules' },
-  { id: '2', name: 'Manioc frais du village', price: 300, unit: 'kg', stock: 200, sold: 80, status: 'active', image: 'https://images.unsplash.com/photo-1598512752271-33f913a5af13?w=200&h=200&fit=crop', category: 'Tubercules' },
-  { id: '3', name: 'Banane plantain mûre', price: 400, unit: 'régime', stock: 50, sold: 32, status: 'active', image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=200&h=200&fit=crop', category: 'Fruits' },
-  { id: '4', name: 'Tomates fraîches', price: 800, unit: 'kg', stock: 0, sold: 120, status: 'sold', image: 'https://images.unsplash.com/photo-1546470427-227c7369a9b9?w=200&h=200&fit=crop', category: 'Légumes' },
-  { id: '5', name: 'Piment frais', price: 1500, unit: 'kg', stock: 25, sold: 15, status: 'active', image: 'https://images.unsplash.com/photo-1583119022894-919a68a3d0e3?w=200&h=200&fit=crop', category: 'Épices' },
-  { id: '6', name: 'Aubergines violettes', price: 600, unit: 'kg', stock: 40, sold: 28, status: 'draft', image: 'https://images.unsplash.com/photo-1613881553903-4b2ed59eb970?w=200&h=200&fit=crop', category: 'Légumes' },
-  { id: '7', name: 'Maïs grain séché', price: 350, unit: 'kg', stock: 300, sold: 150, status: 'active', image: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=200&h=200&fit=crop', category: 'Céréales' },
-  { id: '8', name: 'Riz local parfumé', price: 700, unit: 'kg', stock: 100, sold: 65, status: 'active', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&h=200&fit=crop', category: 'Céréales' },
-  { id: '9', name: 'Oignons rouges', price: 900, unit: 'kg', stock: 60, sold: 42, status: 'active', image: 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=200&h=200&fit=crop', category: 'Légumes' },
-  { id: '10', name: 'Mangues Kent', price: 1200, unit: 'kg', stock: 0, sold: 200, status: 'sold', image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=200&h=200&fit=crop', category: 'Fruits' },
-]
+// Mapped products from store (already has isAvailable mapping to status)
+const products = computed(() => {
+  if (!productStore.products || productStore.products.length === 0) {
+    return []
+  }
+  
+  return productStore.products.map((p: any) => {
+    let status = 'active'
+    if (p.deleted) status = 'draft'
+    else if ((p.quantiteDisponible || 0) <= 0 && p.isAvailable === false) status = 'sold'
+    else if (p.isAvailable === false) status = 'draft'
+
+    return {
+      id: p.id,
+      name: p.nom || p.name || 'Produit sans nom',
+      price: p.prix || p.price || 0,
+      unit: p.unite || p.unit || 'unité',
+      stock: p.quantiteDisponible !== undefined ? p.quantiteDisponible : (p.quantity || 0),
+      sold: p.nombreCommandes || p.quantiteVendue || 0,
+      status: status,
+      isAvailable: p.isAvailable,
+      image: (p.photos && p.photos.length > 0) ? p.photos[0] : 'https://images.unsplash.com/photo-1590165482129-1b8b27698780?w=400&h=400&fit=crop',
+      category: p.categorie || p.category || 'Général',
+      description: p.description || '',
+      type: 'PAYSAN',
+      _raw: p
+    }
+  })
+})
 
 const filteredProducts = computed(() => {
-  if (activeTab.value === 'active') return products.filter(p => p.status === 'active')
-  if (activeTab.value === 'draft') return products.filter(p => p.status === 'draft')
-  return products.filter(p => p.status === 'sold')
+  const allProducts = products.value
+  if (activeTab.value === 'active') return allProducts.filter(p => p.status === 'active')
+  if (activeTab.value === 'draft') return allProducts.filter(p => p.status === 'draft')
+  return allProducts.filter(p => p.status === 'sold')
 })
 
 const stats = computed(() => ({
-  total: products.length,
-  active: products.filter(p => p.status === 'active').length,
-  draft: products.filter(p => p.status === 'draft').length,
-  sold: products.filter(p => p.status === 'sold').length,
-  totalRevenue: products.reduce((sum, p) => sum + (p.price * p.sold), 0)
+  total: products.value.filter(p => p.id && !String(p.id).startsWith('mock')).length,
+  active: products.value.filter(p => p.status === 'active' && p.id && !String(p.id).startsWith('mock')).length,
+  draft: products.value.filter(p => p.status === 'draft' && p.id && !String(p.id).startsWith('mock')).length,
+  sold: products.value.filter(p => p.status === 'sold' && p.id && !String(p.id).startsWith('mock')).length,
+  totalRevenue: products.value.filter(p => p.id && !String(p.id).startsWith('mock')).reduce((sum, p) => sum + (p.price * p.sold), 0)
 }))
 
 const getStatusBadge = (status: string) => {
   if (status === 'active') return { label: 'En vente', class: 'bg-green-600' }
-  if (status === 'draft') return { label: 'Brouillon', class: 'bg-muted text-muted-foreground' }
+  if (status === 'draft') return { label: 'Désactivé', class: 'bg-muted text-muted-foreground' }
   return { label: 'Épuisé', class: 'bg-secondary' }
+}
+
+async function handleDelete(id: string) {
+  if (id.startsWith('mock')) {
+    toast.error('Impossible de supprimer un produit de démonstration')
+    return
+  }
+  
+  if (confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) {
+    try {
+      await productStore.deleteProduct(id)
+      toast.success('Produit supprimé avec succès')
+    } catch (error) {
+      console.error('Delete error:', error)
+      toast.error('Erreur lors de la suppression')
+    }
+  }
+}
+
+async function handleToggleAvailability(product: any) {
+  if (product.id.startsWith('mock')) {
+    toast.error('Actions limitées sur les produits de démo')
+    return
+  }
+
+  isToggling.value = product.id
+  try {
+    await productStore.toggleAvailability(product.id)
+    toast.success(product.isAvailable ? 'Produit désactivé (Brouillon)' : 'Produit activé !')
+  } catch (error) {
+    toast.error('Erreur lors du changement de disponibilité')
+  } finally {
+    isToggling.value = null
+  }
+}
+
+function handleEdit(product: any) {
+  if (product.id.startsWith('mock')) {
+    toast.error('Impossible de modifier un produit de démonstration')
+    return
+  }
+  emit('navigate', 'edit-product', { product })
 }
 </script>
 
@@ -187,7 +260,7 @@ const getStatusBadge = (status: string) => {
               <div class="flex-1 min-w-0">
                 <div class="flex items-start justify-between gap-2">
                   <p class="font-medium text-sm line-clamp-1">{{ product.name }}</p>
-                  <Badge :class="['text-xs flex-shrink-0', getStatusBadge(product.status).class]">
+                  <Badge :class="`text-xs flex-shrink-0 ${getStatusBadge(product.status).class}`">
                     {{ getStatusBadge(product.status).label }}
                   </Badge>
                 </div>
@@ -203,13 +276,17 @@ const getStatusBadge = (status: string) => {
 
               <!-- Actions -->
               <div class="flex flex-col gap-1 flex-shrink-0">
-                <Button size="icon" variant="ghost" class="h-8 w-8">
+                <Button size="icon" variant="ghost" class="h-8 w-8" @click="emit('navigate', 'product-detail', { product, from: 'my-products' })">
                   <Eye class="w-4 h-4" />
                 </Button>
-                <Button size="icon" variant="ghost" class="h-8 w-8">
+                <Button size="icon" variant="ghost" :class="`h-8 w-8 ${(product as any).isAvailable ? 'text-green-600' : 'text-muted-foreground'}`" @click="handleToggleAvailability(product)" :disabled="isToggling === product.id">
+                  <Loader2 v-if="isToggling === product.id" class="w-4 h-4 animate-spin" />
+                  <Power v-else class="w-4 h-4" />
+                </Button>
+                <Button size="icon" variant="ghost" class="h-8 w-8" @click="handleEdit(product)">
                   <Edit class="w-4 h-4" />
                 </Button>
-                <Button size="icon" variant="ghost" class="h-8 w-8 text-destructive hover:text-destructive">
+                <Button size="icon" variant="ghost" class="h-8 w-8 text-destructive hover:text-destructive" @click="handleDelete(product.id)">
                   <Trash2 class="w-4 h-4" />
                 </Button>
               </div>
@@ -224,23 +301,27 @@ const getStatusBadge = (status: string) => {
           <Card v-for="product in filteredProducts" :key="product.id" class="overflow-hidden group">
             <!-- Product Image -->
             <div class="aspect-[4/3] relative overflow-hidden bg-muted">
-              <img 
-                :src="product.image" 
+              <img
+                :src="product.image"
                 :alt="product.name"
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
-              <Badge :class="['absolute top-2 left-2 text-xs', getStatusBadge(product.status).class]">
+              <Badge :class="`absolute top-2 left-2 text-xs ${getStatusBadge(product.status).class}`">
                 {{ getStatusBadge(product.status).label }}
               </Badge>
               <!-- Actions overlay -->
               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <Button size="icon" variant="secondary" class="h-8 w-8">
+                <Button size="icon" variant="secondary" class="h-8 w-8" @click="emit('navigate', 'product-detail', { product, from: 'my-products' })">
                   <Eye class="w-4 h-4" />
                 </Button>
-                <Button size="icon" variant="secondary" class="h-8 w-8">
+                <Button size="icon" variant="secondary" :class="`h-8 w-8 ${(product as any).isAvailable ? 'text-green-600' : 'text-gray-400'}`" @click="handleToggleAvailability(product)" :disabled="isToggling === product.id">
+                  <Loader2 v-if="isToggling === product.id" class="w-4 h-4 animate-spin" />
+                  <Power v-else class="w-4 h-4" />
+                </Button>
+                <Button size="icon" variant="secondary" class="h-8 w-8" @click="handleEdit(product)">
                   <Edit class="w-4 h-4" />
                 </Button>
-                <Button size="icon" variant="destructive" class="h-8 w-8">
+                <Button size="icon" variant="destructive" class="h-8 w-8" @click="handleDelete(product.id)">
                   <Trash2 class="w-4 h-4" />
                 </Button>
               </div>

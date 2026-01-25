@@ -19,7 +19,8 @@ const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref({
   federationName: '', registrationNumber: '', rccm: '', ncc: '', presidentName: '', location: '', region: '',
   filiere: '', customFiliere: '', secondaryFilieres: [] as string[], membersCount: '', yearFounded: '',
-  affiliationId: '', affiliationName: '', affiliationType: '', teamMembers: [] as any[]
+  affiliationId: '', affiliationName: '', affiliationType: '', teamMembers: [] as any[],
+  contactPhone: '', contactEmail: ''
 })
 const newSecondaryFiliere = ref('')
 const progress = computed(() => (step.value / 4) * 100)
@@ -37,7 +38,7 @@ const regionOptions = [
 ]
 
 async function handleNext() { 
-  if (step.value === 1 && (!formData.value.federationName || !formData.value.registrationNumber || !formData.value.presidentName || !formData.value.region || !formData.value.location)) {
+  if (step.value === 1 && (!formData.value.federationName || !formData.value.registrationNumber || !formData.value.presidentName || !formData.value.region || !formData.value.location || !formData.value.contactPhone)) {
     toast.error('Veuillez remplir les champs obligatoires'); return
   }
   if (step.value === 2 && !formData.value.filiere && !formData.value.customFiliere) {
@@ -52,8 +53,18 @@ async function handleNext() {
       await authStore.completeFederationProfile(formData.value)
       toast.success('Profil fédération créé avec succès !')
       emit('complete', formData.value)
-    } catch (error) {
-      toast.error("Erreur lors de la création du profil de fédération")
+    } catch (error: any) {
+      console.error('Registration error:', error)
+      const responseData = error.response?.data
+      if (responseData?.errors && Array.isArray(responseData.errors)) {
+        responseData.errors.forEach((err: any) => {
+          toast.error(err.defaultMessage || 'Erreur de validation')
+        })
+      } else if (responseData?.message) {
+        toast.error(responseData.message)
+      } else {
+        toast.error("Erreur lors de la création du profil de fédération")
+      }
     }
   }
 }
@@ -68,7 +79,7 @@ function addSecondaryFiliere(f: string) { if (f.trim() && !formData.value.second
 function removeSecondaryFiliere(i: number) { formData.value.secondaryFilieres.splice(i, 1); toast.success('Filière supprimée') }
 function toggleSecondaryFiliere(label: string) { const i = formData.value.secondaryFilieres.indexOf(label); if (i > -1) formData.value.secondaryFilieres.splice(i, 1); else formData.value.secondaryFilieres.push(label) }
 
-const isStep1Valid = computed(() => formData.value.federationName && formData.value.registrationNumber && formData.value.presidentName && formData.value.region && formData.value.location)
+const isStep1Valid = computed(() => formData.value.federationName && formData.value.registrationNumber && formData.value.presidentName && formData.value.region && formData.value.location && formData.value.contactPhone)
 const isStep2Valid = computed(() => formData.value.filiere && formData.value.membersCount)
 </script>
 
@@ -79,13 +90,19 @@ const isStep2Valid = computed(() => formData.value.filiere && formData.value.mem
 
       <div v-if="step === 1" class="space-y-6">
         <h2 class="text-primary">Informations de la fédération</h2>
-        <div class="space-y-2"><Label>Nom de la fédération</Label><div class="relative"><Building2 class="absolute left-3 top-3 h-5 w-5 text-muted-foreground" /><Input v-model="formData.federationName" placeholder="Ex: Fédération Nationale du Cacao" class="pl-10" /></div></div>
-        <div class="space-y-2"><Label>Numéro d'agrément / Récépissé</Label><Input v-model="formData.registrationNumber" placeholder="Ex: REC/2024/001/MINAGRI" /></div>
-        <div class="space-y-2"><Label>RCCM</Label><Input v-model="formData.rccm" placeholder="Ex: RCCM/2024/001/MINAGRI" /></div>
-        <div class="space-y-2"><Label>NCC</Label><Input v-model="formData.ncc" placeholder="Ex: NCC/2024/001/MINAGRI" /></div>
-        <div class="space-y-2"><Label>Nom du Président</Label><Input v-model="formData.presidentName" placeholder="Nom complet" /></div>
-        <div class="space-y-2"><Label>Niveau de couverture</Label><Select v-model="formData.region" :options="regionOptions" placeholder="Sélectionnez" /></div>
-        <div class="space-y-2"><Label>Siège (Ville)</Label><div class="relative"><MapPin class="absolute left-3 top-3 h-5 w-5 text-muted-foreground" /><Input v-model="formData.location" placeholder="Ex: Abidjan, Yamoussoukro..." class="pl-10" /></div></div>
+        <div class="space-y-2"><Label>Nom de la fédération *</Label><div class="relative"><Building2 class="absolute left-3 top-3 h-5 w-5 text-muted-foreground" /><Input v-model="formData.federationName" placeholder="Ex: Fédération Nationale du Cacao" class="pl-10" /></div></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2"><Label>Téléphone *</Label><Input v-model="formData.contactPhone" type="tel" placeholder="+225..." /></div>
+          <div class="space-y-2"><Label>Email</Label><Input v-model="formData.contactEmail" type="email" placeholder="contact@federation.ci" /></div>
+        </div>
+        <div class="space-y-2"><Label>Numéro d'agrément / Récépissé *</Label><Input v-model="formData.registrationNumber" placeholder="Ex: REC/2024/001/MINAGRI" /></div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2"><Label>RCCM</Label><Input v-model="formData.rccm" placeholder="Ex: CI-ABJ..." /></div>
+          <div class="space-y-2"><Label>NCC</Label><Input v-model="formData.ncc" placeholder="1234567A" /></div>
+        </div>
+        <div class="space-y-2"><Label>Nom du Président *</Label><Input v-model="formData.presidentName" placeholder="Nom complet" /></div>
+        <div class="space-y-2"><Label>Niveau de couverture *</Label><Select v-model="formData.region" :options="regionOptions" placeholder="Sélectionnez" /></div>
+        <div class="space-y-2"><Label>Siège (Ville) *</Label><div class="relative"><MapPin class="absolute left-3 top-3 h-5 w-5 text-muted-foreground" /><Input v-model="formData.location" placeholder="Ex: Abidjan, Yamoussoukro..." class="pl-10" /></div></div>
         <div class="space-y-2"><Label>Année de création</Label><Input v-model="formData.yearFounded" type="number" placeholder="Ex: 2010" /></div>
         <Button class="w-full" :disabled="!isStep1Valid" @click="handleNext">Continuer</Button>
       </div>

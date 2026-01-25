@@ -33,6 +33,7 @@ import InstitutionHome from '@/views/home/InstitutionHome.vue'
 import MessagesView from '@/views/messages/MessagesView.vue'
 import MyProductsView from '@/views/products/MyProductsView.vue'
 import AddProductView from '@/views/products/AddProductView.vue'
+import EditProductView from '@/views/products/EditProductView.vue'
 import MarketplaceView from '@/views/marketplace/MarketplaceView.vue'
 import ProductDetailView from '@/views/marketplace/ProductDetailView.vue'
 import OrdersView from '@/views/orders/OrdersView.vue'
@@ -70,10 +71,13 @@ const user = computed(() => authStore.user)
 onMounted(() => {
   authStore.initializeAuth()
   if (authStore.isAuthenticated) {
-    if (authStore.user?.onboardingCompleted) {
+    const user = authStore.user
+    if (user?.onboardingCompleted) {
       currentScreen.value = 'home'
-    } else if (authStore.user?.role && authStore.user.role !== 'USER') {
-      currentScreen.value = `${authStore.user.role}-onboarding` as Screen
+    } else if (user?.role && user.role !== 'USER') {
+      // If we have a role but not completed, go to that role's onboarding
+      selectedRole.value = user.role
+      currentScreen.value = `${user.role}-onboarding` as Screen
     } else {
       currentScreen.value = 'role-selection'
     }
@@ -105,10 +109,12 @@ const showFullLayout = computed(() => {
 })
 
 // Navigation handlers
-function handleVerifyOTP(authResult: any) {
-  const { isNewUser } = authResult
+function handleVerifyOTP() {
+  const user = authStore.user
   
-  if (isNewUser) {
+  // If user is not fully registered (completed: false) or has generic 'USER' role,
+  // we always redirect to role selection to ensure they pick or confirm their profile.
+  if (!user || user.role === 'USER' || !user.onboardingCompleted) {
     currentScreen.value = 'role-selection'
   } else {
     currentScreen.value = 'home'
@@ -132,7 +138,7 @@ function handleSelectRole(role: UserRole) {
   currentScreen.value = `${role}-onboarding` as Screen
 }
 
-function handleCompleteOnboarding(data: Record<string, unknown>) {
+function handleCompleteOnboarding(data: any) {
   authStore.completeOnboarding(data)
   currentScreen.value = 'home'
   toast.success('Bienvenue sur TITRA !')
@@ -164,7 +170,10 @@ function toggleMobileSidebar() {
 // Get correct home component based on role
 const HomeComponent = computed(() => {
   if (!user.value) return ConsumerHome
-  switch (user.value.role) {
+  
+  const role = user.value.role
+  
+  switch (role) {
     case 'consumer': return ConsumerHome
     case 'farmer': return FarmerHome
     case 'processor': return TransformerHome
@@ -175,13 +184,18 @@ const HomeComponent = computed(() => {
     case 'union': return InstitutionHome
     case 'federation': return InstitutionHome
     case 'interprofession': return InstitutionHome
-    default: return FarmerHome
+    default: 
+      // If role is unknown or 'USER', return to role selection if possible
+      // But HomeComponent is only for home screen
+      return FarmerHome
   }
 })
 
 // Get correct onboarding component based on selected role
 const OnboardingComponent = computed(() => {
-  switch (selectedRole.value) {
+  const role = selectedRole.value || (user.value?.role && user.value.role !== 'USER' ? user.value.role : null)
+  
+  switch (role) {
     case 'farmer': return FarmerOnboarding
     case 'processor': return TransformerOnboarding
     case 'merchant': return MerchantOnboarding
@@ -191,7 +205,7 @@ const OnboardingComponent = computed(() => {
     case 'union': return UnionOnboarding
     case 'federation': return FederationOnboarding
     case 'interprofession': return InterprofessionOnboarding
-    default: return FarmerOnboarding
+    default: return null
   }
 })
 </script>
@@ -226,6 +240,7 @@ const OnboardingComponent = computed(() => {
         :active-screen="currentScreen"
         :role="(user.role || 'farmer') as UserRole"
         :user-name="user.name || ''"
+        :user-photo="user.photo"
         :user-matricule="user.matricule || ''"
         :cart-count="cartStore.totalItems"
         @navigate="handleNavigate"
@@ -239,6 +254,7 @@ const OnboardingComponent = computed(() => {
         :active-screen="currentScreen"
         :role="(user.role || 'farmer') as UserRole"
         :user-name="user.name || ''"
+        :user-photo="user.photo"
         :user-matricule="user.matricule || ''"
         :cart-count="cartStore.totalItems"
         @close="isMobileSidebarOpen = false"
@@ -285,6 +301,15 @@ const OnboardingComponent = computed(() => {
           <!-- Add Product -->
           <AddProductView
             v-else-if="currentScreen === 'add-product' && user"
+            :user-role="user.role === 'processor' ? 'processor' : (user.role === 'cooperative' || user.role === 'association' || user.role === 'union' || user.role === 'federation' || user.role === 'interprofession' ? 'cooperative' : 'farmer')"
+            @back="handleNavigate('my-products')"
+            @navigate="handleNavigate"
+          />
+
+          <!-- Edit Product -->
+          <EditProductView
+            v-else-if="currentScreen === 'edit-product' && user && screenData?.product"
+            :product="screenData.product"
             :user-role="user.role === 'processor' ? 'processor' : 'farmer'"
             @back="handleNavigate('my-products')"
             @navigate="handleNavigate"
@@ -301,7 +326,7 @@ const OnboardingComponent = computed(() => {
           <ProductDetailView
             v-else-if="currentScreen === 'product-detail' && screenData?.product"
             :product="screenData.product"
-            @back="handleNavigate('marketplace')"
+            @back="handleNavigate(screenData.from || 'marketplace')"
             @navigate="handleNavigate"
             @add-to-cart="handleAddToCart"
           />

@@ -1,15 +1,29 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Bell, Plus, TrendingUp, Wallet, Package, Users, Settings, Store, Calculator, GraduationCap, BarChart3, UserPlus } from 'lucide-vue-next'
+import { Bell, Plus, TrendingUp, Wallet, Package, Users, Settings, Store, Calculator, GraduationCap, BarChart3, UserPlus, Loader2 } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import type { User } from '@/types'
+import { usePaysanStore } from '@/stores/paysan'
 
 const props = defineProps<{ user: User }>()
 const emit = defineEmits<{ navigate: [screen: string] }>()
 
+const paysanStore = usePaysanStore()
 const isLoading = ref(true)
-onMounted(() => { setTimeout(() => isLoading.value = false, 1000) })
+
+onMounted(async () => { 
+  try {
+    await Promise.all([
+      paysanStore.fetchDashboardStats(),
+      paysanStore.fetchActivities()
+    ])
+  } catch (error) {
+    console.error('Failed to load cooperative dashboard:', error)
+  } finally {
+    isLoading.value = false 
+  }
+})
 
 const displayName = computed(() => {
   const role = props.user.role as string
@@ -28,12 +42,21 @@ const getRoleLabel = () => {
   return labels[props.user.role as string] || 'Structure'
 }
 
-const stats = computed(() => [
-  { label: 'Membres totaux', value: '147', icon: Users, description: '132 actifs ce mois' },
-  { label: 'Produits vendus', value: '324', icon: Package, description: 'Vendus ce mois' },
-  { label: 'Ventes du mois', value: '8.5M FCFA', icon: TrendingUp, description: '+15% vs mois dernier' },
-  { label: 'Solde disponible', value: `${(props.user.balance || 2450000).toLocaleString()} FCFA`, icon: Wallet, description: 'Disponible pour retrait' },
-])
+const stats = computed(() => {
+  const data = paysanStore.stats || { 
+    membresActifs: 0, 
+    produitsVendusCeMois: 0, 
+    commissionsTotal: 0, 
+    soldeDisponible: 0 
+  }
+  
+  return [
+    { label: 'Membres actifs', value: data.membresActifs?.toString() || '0', icon: Users, description: 'Actifs ce mois' },
+    { label: 'Produits vendus', value: data.produitsVendusCeMois?.toString() || '0', icon: Package, description: 'Vendus ce mois' },
+    { label: 'Commissions', value: `${(data.commissionsTotal || 0).toLocaleString()} F`, icon: TrendingUp, description: 'Total généré' },
+    { label: 'Solde disponible', value: `${(data.soldeDisponible || props.user.balance || 0).toLocaleString()} F`, icon: Wallet, description: 'Disponible pour retrait' },
+  ]
+})
 
 const quickActions = [
   { label: 'Enregistrer un paysan', icon: UserPlus, screen: 'add-member', variant: 'default' as const },
@@ -44,18 +67,27 @@ const quickActions = [
   { label: 'Formation', icon: GraduationCap, screen: 'training', variant: 'outline' as const },
 ]
 
-const topSellers = [
-  { id: '1', name: 'Koné Ibrahim', matricule: 'CI-AGRI-2024-0012', sales: 1850000 },
-  { id: '2', name: 'Traoré Aminata', matricule: 'CI-AGRI-2024-0045', sales: 1620000 },
-  { id: '3', name: 'Ouattara Sékou', matricule: 'CI-AGRI-2024-0023', sales: 1480000 },
-]
+const topSellers = computed(() => {
+  return (paysanStore.stats?.bestSellers || []).map((s: any, index: number) => ({
+    id: s.matricule || index.toString(),
+    name: s.name,
+    matricule: s.matricule,
+    sales: s.totalSales,
+    formattedSales: s.formattedSales
+  }))
+})
 
-const recentActivities = [
-  { id: '1', type: 'member_sale', member: 'Koné Ibrahim', description: 'Vente de 500kg de cacao - Commission: 75,000 FCFA', time: 'Il y a 2h', amount: 75000 },
-  { id: '2', type: 'new_member', member: 'Diallo Fatoumata', description: 'Nouveau membre inscrit', time: 'Il y a 5h' },
-  { id: '3', type: 'member_sale', member: 'Traoré Aminata', description: 'Vente de café arabica - Commission: 45,000 FCFA', time: 'Il y a 1j', amount: 45000 },
-  { id: '4', type: 'new_member', member: 'Bamba Moussa', description: 'Nouveau membre inscrit', time: 'Il y a 2j' },
-]
+const recentActivities = computed(() => {
+  const activities = paysanStore.activities || []
+  return activities.map((act: any, index: number) => ({
+    id: act.id || index, 
+    type: act.type || 'member_sale', 
+    member: act.member || 'Membre', 
+    description: act.description || 'Action effectuée', 
+    time: act.time || 'Récemment', 
+    amount: act.amount
+  })).slice(0, 5) // Show only last 5
+})
 
 function getActivityIcon(type: string) {
   if (type === 'member_sale') return TrendingUp
@@ -145,7 +177,7 @@ function getActivityClass(type: string) {
                 <p class="font-medium text-sm">{{ seller.name }}</p>
                 <p class="text-xs text-muted-foreground">{{ seller.matricule }}</p>
               </div>
-              <p class="font-semibold text-primary">{{ (seller.sales / 1000).toFixed(0) }}k F</p>
+              <p class="font-semibold text-primary">{{ seller.formattedSales || `${(seller.sales / 1000).toFixed(0)}k F` }}</p>
             </div>
           </div>
         </template>

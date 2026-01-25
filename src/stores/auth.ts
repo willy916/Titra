@@ -84,6 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
       const mapApiRoleToSlug = (roleName: string): UserRole => {
         const mapping: Record<string, UserRole> = {
           'Paysan / Producteur': 'farmer',
+          'PAYSAN': 'farmer',
           'Transformateur': 'processor',
           'Commerçant': 'merchant',
           'Transporteur': 'transporter',
@@ -96,10 +97,10 @@ export const useAuthStore = defineStore('auth', () => {
           'Interprofession': 'interprofession',
           'Interprofessionnalité': 'interprofession'
         }
-        return mapping[roleName] || 'farmer'
+        return mapping[roleName] || 'USER'
       }
 
-      const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : null
+      const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : 'USER'
 
       // Try to find a name in all possible fields
       const userName = apiUser.name ||
@@ -171,8 +172,17 @@ export const useAuthStore = defineStore('auth', () => {
     if (token) {
       isAuthenticated.value = true
       if (savedUser) {
-        user.value = JSON.parse(savedUser)
+        const parsedUser = JSON.parse(savedUser)
+        user.value = parsedUser
+        if (parsedUser.role && parsedUser.role !== 'USER') {
+          selectedRole.value = parsedUser.role
+        }
       }
+      // Always fetch fresh user data including profile photo
+      fetchCurrentUser().catch(() => {
+        // If fetch fails (e.g. token expired), we might want to logout or just stay with cached data
+        // For now, let's keep cached data to avoid jarring logout on network error
+      })
     }
   }
 
@@ -237,9 +247,16 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     try {
       const payload: any = {
-        name: profileData.cooperativeName,
-        registrationNumber: profileData.registrationNumber,
+        name: profileData.cooperativeName || profileData.name,
         presidentName: profileData.presidentName,
+        description: profileData.description || "",
+        region: profileData.region || profileData.location,
+        headquarters: profileData.headquarters || profileData.location,
+        foundingDate: profileData.foundingDate || (profileData.yearFounded ? `${profileData.yearFounded}-01-01` : null),
+        logoPath: profileData.logoPath || user.value?.photo,
+
+        // Keep existing fields for backward compatibility
+        registrationNumber: profileData.registrationNumber,
         location: profileData.location,
         numberOfMembers: parseInt(profileData.membersCount) || 0,
       }
@@ -266,9 +283,10 @@ export const useAuthStore = defineStore('auth', () => {
         ...user.value!,
         name: savedData.name || payload.name,
         cooperative: savedData.name || payload.name,
-        location: savedData.location || payload.location,
+        location: savedData.region || savedData.location || payload.location,
         role: 'cooperative',
-        onboardingCompleted: true
+        onboardingCompleted: true,
+        photo: savedData.logoPath || payload.logoPath || user.value?.photo
       }
       setUser(updatedUser)
       localStorage.setItem('user', JSON.stringify(updatedUser))
@@ -286,7 +304,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     try {
       const payload: any = {
-        name: profileData.associationName,
+        name: profileData.associationName || profileData.name,
         registrationNumber: profileData.registrationNumber,
         presidentName: profileData.presidentName,
         location: profileData.location,
@@ -296,9 +314,14 @@ export const useAuthStore = defineStore('auth', () => {
       if (profileData.rccm) payload.rccm = profileData.rccm
       if (profileData.ncc) payload.ncc = profileData.ncc
       if (profileData.yearFounded) payload.creationYear = parseInt(profileData.yearFounded)
-      if (profileData.filiere) payload.mainFiliere = profileData.filiere
-      if (profileData.customFiliere) payload.customMainFiliere = profileData.customFiliere
-      if (profileData.secondaryFilieres?.length) payload.secondaryFilieres = profileData.secondaryFilieres
+
+      if (profileData.filiere) payload.mainFiliere = profileData.filiere.toUpperCase()
+      if (profileData.customFiliere) payload.mainFiliere = profileData.customFiliere.toUpperCase()
+
+      if (profileData.secondaryFilieres?.length) {
+        payload.secondaryFilieres = profileData.secondaryFilieres.map((f: string) => f.toUpperCase())
+      }
+
       if (profileData.contactPhone) payload.contactPhone = profileData.contactPhone
       if (profileData.contactEmail) payload.contactEmail = profileData.contactEmail
 
@@ -338,7 +361,9 @@ export const useAuthStore = defineStore('auth', () => {
         siegeVille: profileData.location,
         zoneCouverture: profileData.region,
         numberOfCompagnie: parseInt(profileData.membersCount) || 0,
-        isIndependant: profileData.affiliationType === 'independent' || !profileData.affiliationId
+        isIndependant: profileData.affiliationType === 'independent' || !profileData.affiliationId,
+        contactPhone: profileData.contactPhone,
+        contactEmail: profileData.contactEmail
       }
 
       if (profileData.rccm) payload.rccm = profileData.rccm
@@ -379,9 +404,11 @@ export const useAuthStore = defineStore('auth', () => {
         agrement: profileData.registrationNumber,
         presidentName: profileData.presidentName,
         siegeVille: profileData.location,
-        zoneCouverture: profileData.region,
+        niveauCouverture: profileData.region?.toUpperCase(), // Maps to NATIONAL, REGIONAL, SECTORIEL
         numberOfCompagnie: parseInt(profileData.membersCount) || 0,
-        isIndependant: profileData.affiliationType === 'independent' || !profileData.affiliationId
+        isIndependant: profileData.affiliationType === 'independent' || !profileData.affiliationId,
+        contactPhone: profileData.contactPhone,
+        contactEmail: profileData.contactEmail
       }
 
       if (profileData.rccm) payload.rccm = profileData.rccm
@@ -421,7 +448,11 @@ export const useAuthStore = defineStore('auth', () => {
         agrement: profileData.registrationNumber,
         presidentName: profileData.presidentName,
         siegeVille: profileData.location,
-        numberOfCompagnie: parseInt(profileData.membersCount) || 0,
+        niveauCouverture: 'NATIONAL', // Default as per documentation, or can be dynamic if UI supports it
+        numberOfUnion: parseInt(profileData.membersCount) || 0,
+        contactPhone: profileData.contactPhone,
+        contactEmail: profileData.contactEmail,
+        secondaryFilieres: profileData.secondaryFilieres || []
       }
 
       if (profileData.rccm) payload.rccm = profileData.rccm
@@ -511,17 +542,35 @@ export const useAuthStore = defineStore('auth', () => {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await api.post('/api/paysan/upload-avatar', formData, {
+      // Use specific endpoint for structures, fallback to user upload for others
+      let endpoint = '/api/user/upload'
+      const role = user.value?.role
+      if (role && ['cooperative', 'association', 'union', 'federation', 'interprofession'].includes(role)) {
+        endpoint = `/api/${role}/upload-avatar`
+      }
+
+      const response = await api.post(endpoint, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       })
 
-      if (user.value) {
-        user.value.photo = response.data.body // Assuming API returns the URL
+      const data = response.data
+      // Support both new structure (message.profile.logo) and older formats
+      const newUrl = data.message?.profile?.logo ||
+        data.message?.logo ||
+        data.logoUrl ||
+        data.avatarUrl ||
+        (typeof data.message === 'string' ? data.message : null) ||
+        data.body ||
+        data.data
+
+      if (user.value && newUrl) {
+        user.value.photo = newUrl
+        localStorage.setItem('user', JSON.stringify(user.value))
       }
 
-      return response.data
+      return data
     } catch (error) {
       console.error('Upload Avatar error:', error)
       throw error
@@ -608,6 +657,80 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function fetchCurrentUser() {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/user/me')
+      console.log('Fetch Current User Response:', response.data)
+      const message = response.data.message || response.data.body || response.data
+      const { user: apiUser, profile } = message
+
+      if (!apiUser) throw new Error('User data not found')
+
+      // Role mapping helper (reused)
+      const mapApiRoleToSlug = (roleName: string): UserRole => {
+        const mapping: Record<string, UserRole> = {
+          'Paysan / Producteur': 'farmer',
+          'PAYSAN': 'farmer', // Handle uppercase from backend
+          'Transformateur': 'processor',
+          'Commerçant': 'merchant',
+          'Transporteur': 'transporter',
+          'Consommateur': 'consumer',
+          'Formation': 'independent',
+          'Coopérative': 'cooperative',
+          'Association': 'association',
+          'Union': 'union',
+          'Fédération': 'federation',
+          'Interprofession': 'interprofession',
+          'Interprofessionnalité': 'interprofession'
+        }
+        return mapping[roleName] || 'farmer'
+      }
+
+      const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : (user.value?.role || 'farmer')
+
+      // Try to find a name in all possible fields
+      let userName = apiUser.name || apiUser.phoneNumber || 'Utilisateur'
+
+      if (profile) {
+        if (profile.name) {
+          userName = profile.name
+        } else if (profile.firstName || profile.lastName) {
+          userName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
+        }
+      }
+
+      const mappedUser: User = {
+        ...apiUser,
+        id: apiUser.id,
+        phone: apiUser.phoneNumber || '',
+        name: userName,
+        role: roleSlug,
+        verified: apiUser.verified,
+        onboardingCompleted: apiUser.completed || (!!profile), // Assume completed if profile exists
+        photo: message.avatarUrl || (profile && profile.avatarUrl) || (profile && profile.avatarPath) || (user.value?.photo || undefined),
+        matricule: (profile && profile.codePaysan) ? profile.codePaysan : undefined // Map matricule if available
+      } as User
+
+      // specific mapping for location if available in profile
+      if (profile && profile.address) {
+        mappedUser.location = profile.address
+      }
+
+      console.log('Mapped Current User:', mappedUser)
+
+      setUser(mappedUser)
+      localStorage.setItem('user', JSON.stringify(mappedUser))
+      return mappedUser
+    } catch (error) {
+      console.error('Fetch current user error:', error)
+      // potential token issue, maybe logout if 401
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   function updateProfile(updates: Partial<User>) {
     if (user.value) {
       user.value = { ...user.value, ...updates }
@@ -681,6 +804,7 @@ export const useAuthStore = defineStore('auth', () => {
     getAllFederations,
     getAllInterprofessions,
     getAllFilieres,
+    fetchCurrentUser,
   }
 }
 )

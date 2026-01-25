@@ -222,3 +222,4 @@ export type Screen =
   | "accounting"
   | "training"
   | "order-detail"
+  | "edit-product"

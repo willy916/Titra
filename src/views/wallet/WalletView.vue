@@ -1,31 +1,61 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Wallet, TrendingUp, DollarSign, CreditCard, PiggyBank } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue'
+import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Wallet, TrendingUp, DollarSign, CreditCard, PiggyBank, Loader2 } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import type { User } from '@/types'
+import { usePaysanStore } from '@/stores/paysan'
+import { toast } from 'vue-sonner'
 
 const props = defineProps<{ user: User }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 
+const paysanStore = usePaysanStore()
+const isLoading = ref(true)
 const activeTab = ref('all')
 
-const chartData = [
-  { month: 'Jan', amount: 45000, label: 'Janvier' },
-  { month: 'Fév', amount: 52000, label: 'Février' },
-  { month: 'Mar', amount: 48000, label: 'Mars' },
-  { month: 'Avr', amount: 65000, label: 'Avril' },
-  { month: 'Mai', amount: 75000, label: 'Mai' },
-  { month: 'Juin', amount: 82000, label: 'Juin' },
-]
+onMounted(async () => {
+  try {
+    await paysanStore.fetchWallet()
+  } catch (error) {
+    console.error('Error fetching wallet:', error)
+    toast.error('Erreur lors du chargement du portefeuille')
+  } finally {
+    isLoading.value = false
+  }
+})
 
-const transactions = [
-  { id: '1', type: 'credit', description: 'Vente de café - 50kg', amount: 75000, date: new Date('2024-12-20T10:30:00'), status: 'completed' },
-  { id: '2', type: 'debit', description: 'Retrait Mobile Money', amount: -25000, date: new Date('2024-12-19T14:15:00'), status: 'completed' },
-  { id: '3', type: 'credit', description: 'Vente de cacao - 100kg', amount: 125000, date: new Date('2024-12-18T09:45:00'), status: 'completed' },
-  { id: '4', type: 'credit', description: 'Commission membre', amount: 15000, date: new Date('2024-12-17T16:20:00'), status: 'pending' },
-  { id: '5', type: 'debit', description: 'Achat intrants', amount: -35000, date: new Date('2024-12-16T11:00:00'), status: 'completed' },
-]
+const walletData = computed(() => {
+  const base = paysanStore.wallet || {}
+  return {
+    soldeDisponible: Number(base.soldeDisponible ?? props.user.balance ?? 0),
+    soldeEscrow: Number(base.soldeEscrow ?? props.user.pendingBalance ?? 0),
+    statsMois: base.statsMois || { nombreVentes: 0, revenuTotalBrut: 0, totalCommissions: 0 },
+    evolutionRevenus: Array.isArray(base.evolutionRevenus) ? base.evolutionRevenus : [],
+    transactions: Array.isArray(base.transactions) ? base.transactions : []
+  }
+})
+
+const chartData = computed(() => {
+  const evolution = walletData.value.evolutionRevenus
+  if (!evolution || evolution.length === 0) {
+    return [
+      { month: 'Jan', amount: 0, label: 'Janvier' },
+      { month: 'Fév', amount: 0, label: 'Février' },
+      { month: 'Mar', amount: 0, label: 'Mars' },
+      { month: 'Avr', amount: 0, label: 'Avril' },
+      { month: 'Mai', amount: 0, label: 'Mai' },
+      { month: 'Juin', amount: 0, label: 'Juin' },
+    ]
+  }
+  return evolution.map((d: any) => ({
+    month: d.mois || d.month || '?',
+    amount: Number(d.montant || d.amount || d.revenue || 0),
+    label: d.mois || d.month || d.label || '?'
+  }))
+})
+
+// Transactions are now fetched from walletData.value.transactions
 
 // SVG Chart calculations
 const chartWidth = 320
@@ -34,12 +64,20 @@ const padding = { top: 20, right: 20, bottom: 30, left: 45 }
 const graphWidth = chartWidth - padding.left - padding.right
 const graphHeight = chartHeight - padding.top - padding.bottom
 
-const maxAmount = computed(() => Math.max(...chartData.map(d => d.amount)) * 1.1)
-const minAmount = computed(() => Math.min(...chartData.map(d => d.amount)) * 0.9)
+const maxAmount = computed(() => {
+  const vals = chartData.value.map(d => d.amount)
+  const max = Math.max(...vals, 1000)
+  return max * 1.1
+})
+const minAmount = computed(() => {
+  const vals = chartData.value.map(d => d.amount)
+  const min = Math.min(...vals, 0)
+  return min * 0.9
+})
 
 const points = computed(() => {
-  return chartData.map((d, i) => ({
-    x: padding.left + (i / (chartData.length - 1)) * graphWidth,
+  return chartData.value.map((d, i) => ({
+    x: padding.left + (i / (chartData.value.length - 1)) * graphWidth,
     y: padding.top + graphHeight - ((d.amount - minAmount.value) / (maxAmount.value - minAmount.value)) * graphHeight,
     amount: d.amount,
     month: d.month,
@@ -47,18 +85,7 @@ const points = computed(() => {
   }))
 })
 
-const linePath = computed(() => {
-  return points.value.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-})
-
-const areaPath = computed(() => {
-  const line = points.value.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-  const lastPoint = points.value[points.value.length - 1]
-  const firstPoint = points.value[0]
-  return `${line} L ${lastPoint.x} ${padding.top + graphHeight} L ${firstPoint.x} ${padding.top + graphHeight} Z`
-})
-
-// Smooth curve using bezier
+// SVG paths using points
 const smoothLinePath = computed(() => {
   if (points.value.length < 2) return ''
   let path = `M ${points.value[0].x} ${points.value[0].y}`
@@ -109,17 +136,24 @@ const gridLines = computed(() => {
 
 const hoveredPoint = ref<number | null>(null)
 
-const totalRevenue = computed(() => chartData.reduce((sum, d) => sum + d.amount, 0))
-const avgRevenue = computed(() => Math.round(totalRevenue.value / chartData.length))
+const totalRevenue = computed(() => chartData.value.reduce((sum, d) => sum + d.amount, 0))
+const avgRevenue = computed(() => chartData.value.length ? Math.round(totalRevenue.value / chartData.value.length) : 0)
 const growth = computed(() => {
-  const lastTwo = chartData.slice(-2)
+  if (chartData.value.length < 2) return 0
+  const lastTwo = chartData.value.slice(-2)
+  if (!lastTwo[0].amount) return 0
   return Math.round(((lastTwo[1].amount - lastTwo[0].amount) / lastTwo[0].amount) * 100)
 })
 
+const setHoveredPoint = (val: number | null) => {
+  hoveredPoint.value = val
+}
+
 const filteredTransactions = computed(() => {
-  if (activeTab.value === 'all') return transactions
-  if (activeTab.value === 'credit') return transactions.filter(t => t.amount > 0)
-  return transactions.filter(t => t.amount < 0)
+  const allTx = walletData.value.transactions || []
+  if (activeTab.value === 'all') return allTx
+  if (activeTab.value === 'credit') return allTx.filter((t: any) => t.type === 'ENTRY')
+  return allTx.filter((t: any) => t.type === 'EXIT')
 })
 </script>
 
@@ -133,8 +167,14 @@ const filteredTransactions = computed(() => {
       </button>
     </div>
 
+    <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-12 min-h-[60vh]">
+      <Loader2 class="w-12 h-12 text-primary animate-spin mb-4" />
+      <p class="text-muted-foreground">Chargement des données financières...</p>
+    </div>
+
     <!-- Balance Card -->
-    <div class="p-6">
+    <div v-else class="space-y-0">
+      <div class="p-6">
       <Card class="bg-gradient-to-br from-[#2D5016] via-[#3d6b1e] to-[#4CAF50] text-white p-6 relative overflow-hidden">
         <!-- Background pattern -->
         <div class="absolute inset-0 opacity-10">
@@ -155,7 +195,7 @@ const filteredTransactions = computed(() => {
             </div>
             <span class="text-sm opacity-90">Solde disponible</span>
           </div>
-          <p class="text-4xl font-bold mb-6">{{ (props.user.balance || 0).toLocaleString() }} <span class="text-xl font-normal opacity-80">FCFA</span></p>
+          <p class="text-4xl font-bold mb-6">{{ walletData.soldeDisponible.toLocaleString() }} <span class="text-xl font-normal opacity-80">FCFA</span></p>
           <div class="flex items-center justify-between pt-4 border-t border-white/20">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
@@ -163,7 +203,7 @@ const filteredTransactions = computed(() => {
               </div>
               <div>
                 <p class="text-xs opacity-75">En attente (Escrow)</p>
-                <p class="font-semibold">{{ (props.user.pendingBalance || 0).toLocaleString() }} FCFA</p>
+                <p class="font-semibold">{{ walletData.soldeEscrow.toLocaleString() }} FCFA</p>
               </div>
             </div>
             <Button @click="emit('navigate', 'withdrawal')" class="bg-white text-[#2D5016] hover:bg-white/90">
@@ -181,17 +221,17 @@ const filteredTransactions = computed(() => {
         <Card class="p-4 bg-gradient-to-br from-success/10 to-success/5 border-success/20">
           <TrendingUp class="w-5 h-5 text-success mb-2" />
           <p class="text-xs text-muted-foreground mb-1">Ventes</p>
-          <p class="font-bold text-lg">24</p>
+          <p class="font-bold text-lg">{{ walletData.statsMois.nombreVentes || 0 }}</p>
         </Card>
         <Card class="p-4 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
           <DollarSign class="w-5 h-5 text-primary mb-2" />
           <p class="text-xs text-muted-foreground mb-1">Revenu total</p>
-          <p class="font-bold text-lg">125k</p>
+          <p class="font-bold text-lg">{{ ((walletData.statsMois.revenuTotalBrut || 0) / 1000).toFixed(1) }}k</p>
         </Card>
         <Card class="p-4 bg-gradient-to-br from-secondary/10 to-secondary/5 border-secondary/20">
           <ArrowUpRight class="w-5 h-5 text-secondary mb-2" />
-          <p class="text-xs text-muted-foreground mb-1">Commission</p>
-          <p class="font-bold text-lg">6.2k</p>
+          <p class="text-xs text-muted-foreground mb-1">Commissions</p>
+          <p class="font-bold text-lg">{{ ((walletData.statsMois.totalCommissions || 0) / 1000).toFixed(1) }}k</p>
         </Card>
       </div>
 
@@ -311,8 +351,8 @@ const filteredTransactions = computed(() => {
                   r="12"
                   fill="transparent"
                   class="cursor-pointer"
-                  @mouseenter="hoveredPoint = i"
-                  @mouseleave="hoveredPoint = null"
+                  @mouseenter="setHoveredPoint(Number(i))"
+                  @mouseleave="setHoveredPoint(null)"
                 />
                 <!-- Point background -->
                 <circle 
@@ -413,26 +453,23 @@ const filteredTransactions = computed(() => {
       <Card class="overflow-hidden divide-y">
         <div v-for="transaction in filteredTransactions" :key="transaction.id" class="p-4">
           <div class="flex items-start gap-3">
-            <div :class="['p-2 rounded-lg', transaction.amount > 0 ? 'bg-success/10' : 'bg-muted']">
-              <component :is="transaction.amount > 0 ? ArrowDownLeft : ArrowUpRight" :class="['w-4 h-4', transaction.amount > 0 ? 'text-success' : 'text-foreground']" />
+            <div :class="['p-2 rounded-lg', transaction.type === 'ENTRY' ? 'bg-success/10' : 'bg-muted']">
+              <component :is="transaction.type === 'ENTRY' ? ArrowDownLeft : ArrowUpRight" :class="['w-4 h-4', transaction.type === 'ENTRY' ? 'text-success' : 'text-foreground']" />
             </div>
             <div class="flex-1 min-w-0">
-              <p class="font-medium text-sm">{{ transaction.description }}</p>
-              <p class="text-xs text-muted-foreground">
-                {{ transaction.date.toLocaleDateString('fr-FR') }} à {{ transaction.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }}
-              </p>
+              <p class="font-medium text-sm">{{ transaction.titre || transaction.title || transaction.description || 'Transaction' }}</p>
+              <p class="text-xs text-muted-foreground">{{ transaction.date }}</p>
             </div>
             <div class="text-right">
-              <p :class="['font-semibold', transaction.amount > 0 ? 'text-success' : 'text-foreground']">
-                {{ transaction.amount > 0 ? '+' : '' }}{{ transaction.amount.toLocaleString() }} FCFA
+              <p :class="['font-semibold', (transaction.type === 'ENTRY' || transaction.type === 'sale') ? 'text-success' : 'text-foreground']">
+                {{ (transaction.type === 'ENTRY' || transaction.type === 'sale') ? '+' : '' }}{{ (transaction.montant || transaction.amount || 0).toLocaleString() }} FCFA
               </p>
-              <p class="text-xs text-muted-foreground capitalize">
-                {{ transaction.status === 'completed' ? 'Complété' : transaction.status === 'pending' ? 'En attente' : 'Échoué' }}
-              </p>
+              <p class="text-xs text-muted-foreground">{{ transaction.statut }}</p>
             </div>
           </div>
         </div>
       </Card>
     </div>
   </div>
+</div>
 </template>

@@ -10,6 +10,7 @@ const props = defineProps<{
   activeScreen: string
   role: string
   userName: string
+  userPhoto?: string
   userMatricule?: string
   cartCount?: number
 }>()
@@ -79,7 +80,10 @@ function handleLogout() { emit('logout'); emit('close') }
 
         <div class="p-3 sm:p-4 border-b border-border">
           <button @click="handleNavigate('profile')" class="w-full flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg hover:bg-muted/50 transition-colors">
-            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0"><User class="w-5 h-5 sm:w-6 sm:h-6 text-primary" /></div>
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden border border-primary/20">
+              <img v-if="userPhoto" :src="userPhoto" :alt="userName" class="w-full h-full object-cover" />
+              <User v-else class="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+            </div>
             <div class="flex-1 text-left min-w-0">
               <p class="font-medium truncate text-sm sm:text-base">{{ userName }}</p>
               <Badge variant="secondary" class="text-xs mt-1">{{ getRoleLabel(role) }}</Badge>

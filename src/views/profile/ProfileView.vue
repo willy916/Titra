@@ -1,22 +1,26 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ArrowLeft, User as UserIcon, MapPin, Phone, Building2, IdCard, Edit, LogOut, ChevronRight, Shield, Camera } from 'lucide-vue-next'
+import { ArrowLeft, User as UserIcon, MapPin, Phone, Building2, IdCard, Edit, LogOut, ChevronRight, Shield, Camera, Loader2 } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import type { User, UserRole } from '@/types'
+import { useAuthStore } from '@/stores/auth'
+import { toast } from 'vue-sonner'
 
 const props = defineProps<{ user: User }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string]; logout: [] }>()
 
+const authStore = useAuthStore()
 const photo = ref(props.user.photo)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const isUploading = ref(false)
 
 const getRoleLabel = (role: UserRole) => {
   const labels: Record<string, string> = {
     farmer: 'Paysan / Producteur', consumer: 'Consommateur', processor: 'Transformateur', merchant: 'Commerçant',
     transporter: 'Transporteur', cooperative: 'Coopérative', association: 'Association', union: 'Union',
-    federation: 'Fédération', interprofession: 'Interprofession', independent: 'Indépendant', admin: 'Administrateur',
+    federation: 'Fédération', interprofession: 'Interprofession', independent: 'Independant', admin: 'Administrateur',
   }
   return labels[role] || role
 }
@@ -30,16 +34,38 @@ const getRoleColor = (role: UserRole) => {
   return colors[role] || 'bg-gray-600'
 }
 
-function handlePhotoChange(event: Event) {
+async function handlePhotoChange(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (file) {
-    const reader = new FileReader()
-    reader.onloadend = () => { photo.value = reader.result as string }
-    reader.readAsDataURL(file)
+    isUploading.value = true
+    try {
+      // 1. Upload to backend
+      const response = await authStore.uploadAvatar(file)
+      // Support both new structure (message.profile.logo) and older formats
+      const newPhotoUrl = response.message?.profile?.logo || 
+                          response.message?.logo || 
+                          response.logoUrl || 
+                          response.avatarUrl || 
+                          (typeof response.message === 'string' ? response.message : null) ||
+                          response.body || 
+                          response.data || 
+                          response
+
+      // 2. Local update for UI
+      photo.value = newPhotoUrl
+      toast.success('Photo de profil mise à jour !')
+    } catch (error) {
+      console.error('Photo upload error:', error)
+      toast.error('Erreur lors de la mise à jour de la photo')
+    } finally {
+      isUploading.value = false
+    }
   }
 }
 
-function handleEditPhoto() { fileInputRef.value?.click() }
+function handleEditPhoto() { 
+  if (!isUploading.value) fileInputRef.value?.click() 
+}
 </script>
 
 <template>
@@ -59,18 +85,33 @@ function handleEditPhoto() { fileInputRef.value?.click() }
       <Card class="p-6">
         <div class="flex flex-col items-center text-center">
           <div class="relative w-24 h-24 mb-4">
-            <div class="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden">
+            <div class="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden border-2 border-primary/20 shadow-inner">
               <img v-if="photo" :src="photo" :alt="user.name" class="w-full h-full object-cover" />
               <UserIcon v-else class="w-12 h-12 text-primary" />
+              
+              <!-- Upload Overlay -->
+              <div v-if="isUploading" class="absolute inset-0 bg-black/40 flex items-center justify-center animate-in fade-in transition-all">
+                <Loader2 class="w-8 h-8 text-white animate-spin" />
+              </div>
             </div>
             <input type="file" ref="fileInputRef" class="hidden" accept="image/*" @change="handlePhotoChange" />
-            <button @click="handleEditPhoto" class="absolute bottom-0 right-0 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors">
-              <Camera class="w-4 h-4" />
+            <button 
+              @click="handleEditPhoto" 
+              :disabled="isUploading"
+              class="absolute bottom-0 right-0 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Camera v-if="!isUploading" class="w-4 h-4" />
+              <Loader2 v-else class="w-4 h-4 animate-spin" />
             </button>
           </div>
-          <h2 class="text-2xl font-medium">{{ user.name }}</h2>
-          <Badge :class="[getRoleColor(user.role), 'mt-2 text-white']">{{ getRoleLabel(user.role) }}</Badge>
-          <Button variant="outline" size="sm" class="mt-4"><Edit class="w-4 h-4 mr-2" />Modifier le profil</Button>
+          <h2 class="text-2xl font-bold text-gray-900">{{ user.name }}</h2>
+          <Badge :class="`${getRoleColor(user.role)} mt-2 text-white border-0 shadow-sm`" variant="default">
+            {{ getRoleLabel(user.role) }}
+          </Badge>
+          <Button variant="outline" size="sm" class="mt-4 rounded-full px-6">
+            <Edit class="w-4 h-4 mr-2" />
+            Modifier le profil
+          </Button>
         </div>
       </Card>
 

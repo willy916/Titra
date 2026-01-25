@@ -8,7 +8,7 @@ import Label from '@/components/ui/Label.vue'
 import Select from '@/components/ui/Select.vue'
 import Badge from '@/components/ui/Badge.vue'
 
-type InternalRole = 'president' | 'secretaire' | 'tresorier' | 'membre'
+type InternalRole = 'PRESIDENT' | 'SECRETAIRE' | 'TRESORIER' | 'MEMBRE' | 'ACCOUNTANT' | 'MANAGER'
 
 interface TeamMember {
   id: string
@@ -30,33 +30,46 @@ const emit = defineEmits<{
 }>()
 
 const ROLE_LABELS: Record<InternalRole, string> = {
-  president: 'Président',
-  secretaire: 'Secrétaire',
-  tresorier: 'Trésorier',
-  membre: 'Membre',
+  PRESIDENT: 'Président',
+  SECRETAIRE: 'Secrétaire',
+  TRESORIER: 'Trésorier',
+  MEMBRE: 'Membre',
+  ACCOUNTANT: 'Comptable',
+  MANAGER: 'Manager / Directeur',
 }
 
 const ROLE_DESCRIPTIONS: Record<InternalRole, string> = {
-  president: 'Accès total avec tous les droits de gestion',
-  secretaire: 'Lecture et vente',
-  tresorier: 'Lecture, vente et gestion financière',
-  membre: 'Lecture uniquement',
+  PRESIDENT: 'Accès total avec tous les droits de gestion',
+  SECRETAIRE: 'Lecture et vente',
+  TRESORIER: 'Lecture, vente et gestion financière',
+  MEMBRE: 'Lecture uniquement',
+  ACCOUNTANT: 'Gestion comptable',
+  MANAGER: 'Direction opérationnelle',
 }
 
 const roleOptions = [
-  { value: 'secretaire', label: 'Secrétaire' },
-  { value: 'tresorier', label: 'Trésorier' },
-  { value: 'membre', label: 'Membre' },
+  { value: 'SECRETAIRE', label: 'Secrétaire' },
+  { value: 'TRESORIER', label: 'Trésorier' },
+  { value: 'ACCOUNTANT', label: 'Comptable' },
+  { value: 'MANAGER', label: 'Manager / Directeur' },
+  { value: 'MEMBRE', label: 'Membre' },
 ]
 
 const newMember = ref({
   name: '',
   phone: '',
   email: '',
-  role: 'secretaire' as InternalRole,
+  role: 'SECRETAIRE' as InternalRole,
 })
 
 const showAddForm = ref(false)
+
+const formatPhoneToIvoryCoast = (phone: string) => {
+  let cleaned = phone.replace(/\D/g, '')
+  if (cleaned.startsWith('225')) cleaned = cleaned.substring(3)
+  if (cleaned.length !== 10) return phone
+  return `+225${cleaned}`
+}
 
 function addMember() {
   if (!newMember.value.name.trim() || !newMember.value.phone.trim()) {
@@ -64,15 +77,17 @@ function addMember() {
     return
   }
 
-  if (newMember.value.role === 'president') {
+  if (newMember.value.role === 'PRESIDENT') {
     toast.error("Il ne peut y avoir qu'un seul président (vous-même)")
     return
   }
 
+  const formattedPhone = formatPhoneToIvoryCoast(newMember.value.phone.trim())
+
   const member: TeamMember = {
     id: Date.now().toString(),
     name: newMember.value.name.trim(),
-    phone: newMember.value.phone.trim(),
+    phone: formattedPhone,
     email: newMember.value.email.trim() || undefined,
     role: newMember.value.role,
   }
@@ -82,7 +97,7 @@ function addMember() {
     name: '',
     phone: '',
     email: '',
-    role: 'secretaire',
+    role: 'SECRETAIRE',
   }
   showAddForm.value = false
   toast.success('Membre ajouté avec succès')
@@ -99,18 +114,22 @@ function cancelAddForm() {
     name: '',
     phone: '',
     email: '',
-    role: 'secretaire',
+    role: 'SECRETAIRE',
   }
 }
 
 function getRoleColor(role: InternalRole): string {
   switch (role) {
-    case 'president':
+    case 'PRESIDENT':
       return 'bg-primary text-primary-foreground'
-    case 'secretaire':
+    case 'SECRETAIRE':
       return 'bg-blue-500 text-white'
-    case 'tresorier':
+    case 'TRESORIER':
       return 'bg-orange-500 text-white'
+    case 'MANAGER':
+      return 'bg-green-600 text-white'
+    case 'ACCOUNTANT':
+      return 'bg-indigo-500 text-white'
     default:
       return 'bg-gray-500 text-white'
   }

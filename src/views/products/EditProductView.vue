@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ArrowLeft, Upload, X, Loader2 } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
@@ -9,17 +9,16 @@ import Textarea from '@/components/ui/Textarea.vue'
 import Select from '@/components/ui/Select.vue'
 import { toast } from 'vue-sonner'
 import { useProductStore } from '@/stores/product'
-import { useAuthStore } from '@/stores/auth'
 
-const props = defineProps<{ userRole: 'farmer' | 'processor' | 'cooperative' | 'association' | 'union' | 'federation' | 'interprofession' }>()
+const props = defineProps<{ 
+  userRole: 'farmer' | 'processor',
+  product: any
+}>()
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 
 const productStore = useProductStore()
-const authStore = useAuthStore()
 const fileInput = ref<HTMLInputElement | null>(null)
 const isUploading = ref(false)
-
-const isInstitution = computed(() => ['cooperative', 'association', 'union', 'federation', 'interprofession'].includes(props.userRole))
 
 const formData = ref({
   name: '',
@@ -29,11 +28,33 @@ const formData = ref({
   unit: 'kg',
   quantity: '',
   images: [] as string[],
+  isAvailable: true
+})
+
+onMounted(() => {
+  if (props.product) {
+    formData.value = {
+      name: props.product.name || '',
+      description: props.product.description || '',
+      category: props.product.category || '',
+      price: props.product.price?.toString() || '',
+      unit: props.product.unit || 'kg',
+      quantity: props.product.stock?.toString() || '',
+      images: props.product.image ? [props.product.image] : [], // This depends on mapping, but API sent a table. 
+                                                              // In MyProductsView we mapped photos[0] to image.
+                                                              // We might want to pass the raw product.
+      isAvailable: props.product.status === 'active'
+    }
+    
+    // If we passed the raw product from API, it might have original fields
+    const raw = props.product._raw || props.product
+    if (raw.photos) formData.value.images = [...raw.photos]
+  }
 })
 
 const farmerCategories = ['Tubercules', 'Céréales', 'Légumes', 'Fruits', 'Épices', 'Légumineuses']
 const processorCategories = ['Produits transformés', 'Farines', 'Huiles', 'Conserves', 'Jus et boissons', 'Condiments']
-const categories = props.userRole === 'processor' ? processorCategories : farmerCategories
+const categories = props.userRole === 'farmer' ? farmerCategories : processorCategories
 const units = ['kg', 'tonne', 'litre', 'unité', 'sac']
 
 async function handleFileUpload(event: Event) {
@@ -43,12 +64,8 @@ async function handleFileUpload(event: Event) {
   isUploading.value = true
   try {
     const file = target.files[0]
-    // Use the specific product photo upload method
     const response = await productStore.uploadProductPhoto(file)
-    
-    // As per user feedback, the API returns { "message": "...", "url": "..." }
     const imageUrl = response.url
-    
     if (imageUrl) {
       formData.value.images.push(imageUrl)
       toast.success('Image ajoutée')
@@ -73,26 +90,22 @@ async function handleSubmit() {
   }
 
   try {
-    const productData = {
+    await productStore.updateProduct(props.product.id, {
       nom: formData.value.name,
       description: formData.value.description,
       categorie: formData.value.category,
       prix: parseFloat(formData.value.price) || 0,
       unite: formData.value.unit,
       quantiteDisponible: parseFloat(formData.value.quantity) || 0,
-      photos: formData.value.images
-    }
-
-    const result = await productStore.addProduct(productData)
+      photos: formData.value.images,
+      isAvailable: formData.value.isAvailable
+    })
     
-    const createdProduct = result.data || result.body || result
-    const productName = createdProduct?.nom || formData.value.name
-    
-    toast.success(`Produit "${productName}" ajouté avec succès !`)
+    toast.success('Produit mis à jour avec succès !')
     emit('navigate', 'my-products')
   } catch (error) {
-    console.error('Submit error:', error)
-    toast.error("Erreur lors de l'ajout du produit")
+    console.error('Update error:', error)
+    toast.error("Erreur lors de la mise à jour du produit")
   }
 }
 </script>
@@ -105,9 +118,7 @@ async function handleSubmit() {
         <button @click="emit('back')" class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
           <ArrowLeft class="w-5 h-5" />
         </button>
-        <h1 class="text-white text-2xl">
-          {{ userRole === 'processor' ? 'Ajouter un produit transformé' : (isInstitution ? 'Ajouter un produit structure' : 'Ajouter un produit') }}
-        </h1>
+        <h1 class="text-white text-2xl">Modifier le produit</h1>
       </div>
     </div>
 
@@ -141,39 +152,30 @@ async function handleSubmit() {
           accept="image/*" 
           @change="handleFileUpload"
         />
-        <p class="text-xs text-muted-foreground mt-2">Ajoutez jusqu'à 5 photos de votre produit</p>
+        <p class="text-xs text-muted-foreground mt-2">Ajoutez jusqu'à 5 photos</p>
       </Card>
 
-      <!-- Informations du produit -->
+      <!-- Informations -->
       <div class="space-y-4">
         <div class="space-y-2">
           <Label for="name">Nom du produit *</Label>
-          <Input
-            id="name"
-            v-model="formData.name"
-            :placeholder="userRole === 'farmer' ? 'Ex: Igname fraîche' : 'Ex: Attiéké premium'"
-          />
+          <Input id="name" v-model="formData.name" />
         </div>
 
         <div class="space-y-2">
           <Label for="description">Description</Label>
-          <Textarea
-            id="description"
-            v-model="formData.description"
-            placeholder="Décrivez votre produit, son origine, ses qualités..."
-            :rows="4"
-          />
+          <Textarea id="description" v-model="formData.description" :rows="4" />
         </div>
 
         <div class="space-y-2">
           <Label for="category">Catégorie *</Label>
-          <Select v-model="formData.category" placeholder="Sélectionnez une catégorie" :options="categories.map(c => ({ value: c, label: c }))" />
+          <Select v-model="formData.category" :options="categories.map(c => ({ value: c, label: c }))" />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label for="price">Prix *</Label>
-            <Input id="price" type="number" v-model="formData.price" placeholder="0" />
+            <Input id="price" type="number" v-model="formData.price" />
           </div>
           <div class="space-y-2">
             <Label for="unit">Unité *</Label>
@@ -183,31 +185,23 @@ async function handleSubmit() {
 
         <div class="space-y-2">
           <Label for="quantity">Quantité disponible *</Label>
-          <Input id="quantity" type="number" v-model="formData.quantity" placeholder="0" />
-          <p class="text-xs text-muted-foreground">Quantité que vous avez en stock</p>
+          <Input id="quantity" type="number" v-model="formData.quantity" />
+        </div>
+
+        <div class="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+          <input type="checkbox" id="available" v-model="formData.isAvailable" class="w-5 h-5 rounded border-primary text-primary focus:ring-primary" />
+          <Label for="available" class="mb-0 cursor-pointer">Produit disponible à la vente</Label>
         </div>
       </div>
-
-      <!-- Info card -->
-      <Card v-if="userRole === 'farmer'" class="p-4 bg-primary/5 border-primary/20">
-        <h4 class="font-medium text-primary mb-2">💡 Conseils pour vendre plus</h4>
-        <ul class="text-sm text-muted-foreground space-y-1">
-          <li>• Ajoutez des photos de qualité</li>
-          <li>• Décrivez précisément votre produit</li>
-          <li>• Indiquez l'origine et la fraîcheur</li>
-          <li>• Proposez un prix compétitif</li>
-        </ul>
-      </Card>
 
       <!-- Buttons -->
       <div class="flex gap-3 pt-4">
         <Button variant="outline" @click="emit('back')" class="flex-1">Annuler</Button>
         <Button @click="handleSubmit" :disabled="productStore.isLoading" class="flex-1">
           <Loader2 v-if="productStore.isLoading" class="w-4 h-4 mr-2 animate-spin" />
-          Publier le produit
+          Enregistrer les modifications
         </Button>
       </div>
     </div>
   </div>
 </template>
-
