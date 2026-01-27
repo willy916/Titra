@@ -242,7 +242,7 @@ const handleSubmit = async () => {
 <template>
   <div class="min-h-screen bg-background pb-24">
     <!-- Header -->
-    <div class="bg-gradient-to-br from-[#2D5016] via-[#2D5016] to-[#1a3009] text-white p-6">
+    <div class="bg-gradient-to-br from-primary via-primary-dark to-primary-darker text-white p-6">
       <div class="flex items-center gap-4 mb-4">
         <button @click="emit('back')" class="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
           <ArrowLeft class="w-5 h-5" />

@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input.vue'
 import Label from '@/components/ui/Label.vue'
 import InputOTP from '@/components/ui/InputOTP.vue'
 import bgImage from '@/assets/bg-agriculture.jpg'
+import logo from '@/assets/styles/logo.jpeg'
 
 const emit = defineEmits<{
   login: []
@@ -136,6 +137,7 @@ onUnmounted(() => {
               <Leaf class="w-6 h-6 text-primary" />
             </div>
             <span class="text-2xl font-bold">TITRA</span>
+            <img :src="logo" alt="TITRA Logo" class="h-12 w-auto brightness-0 invert" />
           </div>
 
           <!-- Main Content -->
@@ -184,10 +186,7 @@ onUnmounted(() => {
           <div class="w-full max-w-md">
             <!-- Mobile Logo -->
             <div class="flex items-center gap-2 mb-8 lg:hidden">
-              <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <Leaf class="w-6 h-6 text-white" />
-              </div>
-              <span class="text-2xl font-bold text-foreground">TITRA</span>
+              <img :src="logo" alt="TITRA Logo" class="h-10 w-auto" />
             </div>
 
             <!-- Phone Step -->

@@ -106,7 +106,7 @@ function getActivityClass(type: string) {
   <div class="pb-20 lg:pb-0">
     <div class="p-4 lg:p-0 space-y-6">
       <!-- Stats Grid -->
-      <div class="bg-gradient-to-br from-[#2D5016] via-[#2D5016] to-[#1a3009] rounded-xl p-6 -mx-4 lg:mx-0">
+      <div class="bg-gradient-to-br from-primary via-primary-dark to-primary-darker rounded-xl p-6 -mx-4 lg:mx-0">
         <div class="flex items-center justify-between mb-4">
           <div>
             <p class="text-white/80 text-sm">{{ getRoleLabel() }}</p>
@@ -171,7 +171,7 @@ function getActivityClass(type: string) {
           <div class="space-y-3">
             <div v-for="(seller, index) in topSellers" :key="seller.id" class="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
               <div class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                <span class="text-primary font-medium">{{ index + 1 }}</span>
+                <span class="text-primary font-medium">{{ Number(index) + 1 }}</span>
               </div>
               <div class="flex-1 min-w-0">
                 <p class="font-medium text-sm">{{ seller.name }}</p>

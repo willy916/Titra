@@ -77,23 +77,23 @@ export const useChatStore = defineStore('chat', () => {
         })
 
         stompClient.value.onConnect = (frame) => {
-            console.log('✅ Connecté! Headers session:', frame.headers)
+            console.log(' Connecté! Headers session:', frame.headers)
 
             const destination = '/user/queue/messages'
-            console.log(`🔔 Abonnement à : ${destination}`)
+            console.log(` Abonnement à : ${destination}`)
 
             stompClient.value?.subscribe(destination, (message) => {
-                console.log('📨 MESSAGE REÇU via WS:', message.body)
+                console.log(' MESSAGE REÇU via WS:', message.body)
                 handleIncomingMessage(message.body)
             })
         }
 
         stompClient.value.onStompError = (frame) => {
-            console.error('❌ STOMP error:', frame.headers['message'])
+            console.error(' STOMP error:', frame.headers['message'])
         }
 
         stompClient.value.onWebSocketError = (event) => {
-            console.error('❌ WebSocket link error:', event)
+            console.error(' WebSocket link error:', event)
         }
 
         stompClient.value.activate()

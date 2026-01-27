@@ -124,7 +124,7 @@ function handleEdit(product: any) {
 <template>
   <div class="min-h-screen bg-background pb-24">
     <!-- Header -->
-    <div class="bg-gradient-to-br from-[#2D5016] via-[#2D5016] to-[#1a3009] text-white p-6">
+    <div class="bg-gradient-to-br from-primary via-primary to-primary-dark text-white p-6">
       <div class="flex items-center gap-4 mb-4">
         <button @click="emit('back')" class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
           <ArrowLeft class="w-5 h-5" />
@@ -133,7 +133,7 @@ function handleEdit(product: any) {
           <h1 class="text-white text-2xl">Mes produits</h1>
           <p class="text-white/80 text-sm">{{ stats.total }} produits • {{ stats.totalRevenue.toLocaleString() }} F de ventes</p>
         </div>
-        <Button @click="emit('navigate', 'add-product')" size="sm" class="bg-white text-[#2D5016] hover:bg-white/90">
+        <Button @click="emit('navigate', 'add-product')" size="sm" class="bg-white text-primary hover:bg-white/90">
           <Plus class="w-4 h-4 mr-1" />Ajouter
         </Button>
       </div>

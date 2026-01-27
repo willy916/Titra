@@ -4,6 +4,7 @@ import { Toaster, toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useChatStore } from '@/stores/chat'
+import logo from '@/assets/styles/logo.jpeg'
 import type { UserRole, Screen } from '@/types'
 
 // Auth Views
@@ -264,8 +265,10 @@ const OnboardingComponent = computed(() => {
   <div class="min-h-screen bg-background">
     <!-- Initial Loader -->
     <div v-if="isInitializing" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center">
-      <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p class="text-muted-foreground animate-pulse">Initialisation de TITRA...</p>
+      <img :src="logo" alt="TITRA" class="h-16 w-auto mb-8 animate-pulse" />
+      <div class="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div class="h-full bg-primary animate-progress origin-left w-full"></div>
+      </div>
     </div>
 
     <!-- Unauthenticated: Signup -->

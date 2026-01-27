@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Home, Search, ShoppingCart, Wallet, User, Package, Truck, Users, BarChart3, Settings, MessageSquare, LogOut, Calculator, GraduationCap, X } from 'lucide-vue-next'
 import Badge from '@/components/ui/Badge.vue'
+import logo from '@/assets/styles/logo.jpeg'
 
 interface NavItem { id: string; label: string; icon: any }
 
@@ -73,6 +74,7 @@ function handleLogout() { emit('logout'); emit('close') }
             <h1 class="text-xl sm:text-2xl font-bold text-white">TITRA</h1>
             <p class="text-xs text-white/80 mt-0.5">Plateforme agricole</p>
           </div>
+            <img :src="logo" alt="TITRA Logo" class="h-10 w-auto brightness-0 invert" />
           <button @click="emit('close')" class="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
             <X class="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </button>

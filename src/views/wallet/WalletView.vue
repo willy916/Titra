@@ -203,7 +203,7 @@ const filteredTransactions = computed(() => {
     <!-- Balance Card -->
     <div v-else class="space-y-0">
       <div class="p-6">
-      <Card class="bg-gradient-to-br from-[#2D5016] via-[#3d6b1e] to-[#4CAF50] text-white p-6 relative overflow-hidden">
+      <Card class="bg-gradient-to-br from-primary via-primary-dark to-primary-darker text-white p-6 relative overflow-hidden">
         <!-- Background pattern -->
         <div class="absolute inset-0 opacity-10">
           <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
@@ -234,7 +234,7 @@ const filteredTransactions = computed(() => {
                 <p class="font-semibold">{{ walletData.soldeEscrow.toLocaleString() }} FCFA</p>
               </div>
             </div>
-            <Button @click="emit('navigate', 'withdrawal')" class="bg-white text-[#2D5016] hover:bg-white/90">
+            <Button @click="emit('navigate', 'withdrawal')" class="bg-white text-primary hover:bg-white/90">
               <CreditCard class="w-4 h-4 mr-2" />Retirer
             </Button>
           </div>
@@ -284,14 +284,14 @@ const filteredTransactions = computed(() => {
             <defs>
               <!-- Gradient for area -->
               <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#2D5016;stop-opacity:0.3"/>
-                <stop offset="50%" style="stop-color:#2D5016;stop-opacity:0.1"/>
-                <stop offset="100%" style="stop-color:#2D5016;stop-opacity:0.02"/>
+                <stop offset="0%" style="stop-color:var(--primary);stop-opacity:0.3"/>
+                <stop offset="50%" style="stop-color:var(--primary);stop-opacity:0.1"/>
+                <stop offset="100%" style="stop-color:var(--primary);stop-opacity:0.02"/>
               </linearGradient>
               <!-- Gradient for line -->
               <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#2D5016"/>
-                <stop offset="100%" style="stop-color:#4CAF50"/>
+                <stop offset="0%" style="stop-color:var(--primary)"/>
+                <stop offset="100%" style="stop-color:var(--primary-dark)"/>
               </linearGradient>
               <!-- Glow effect -->
               <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -303,7 +303,7 @@ const filteredTransactions = computed(() => {
               </filter>
               <!-- Drop shadow for points -->
               <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#2D5016" flood-opacity="0.3"/>
+                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="var(--primary)" flood-opacity="0.3"/>
               </filter>
             </defs>
 
@@ -396,7 +396,7 @@ const filteredTransactions = computed(() => {
                   :cx="point.x" 
                   :cy="point.y" 
                   :r="hoveredPoint === i ? 6 : 3.5"
-                  :fill="i === points.length - 1 ? '#4CAF50' : '#2D5016'"
+                  :fill="i === points.length - 1 ? 'var(--primary-dark)' : 'var(--primary)'"
                   class="transition-all duration-200"
                 />
               </g>

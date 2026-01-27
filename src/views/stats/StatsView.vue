@@ -65,7 +65,7 @@ const structureBreakdown = computed(() => {
   const dist = performanceData.value?.structureDistribution || {}
   
   return [
-    { type: 'Fédérations', count: dist.federations?.count || 0, percentage: parseInt(dist.federations?.percentage) || 0, commission: dist.federations?.caGenereted || 0, color: '#2D5016' },
+    { type: 'Fédérations', count: dist.federations?.count || 0, percentage: parseInt(dist.federations?.percentage) || 0, commission: dist.federations?.caGenereted || 0, color: 'var(--primary)' },
     { type: 'Unions', count: dist.unions?.count || 0, percentage: parseInt(dist.unions?.percentage) || 0, commission: dist.unions?.caGenereted || 0, color: '#FF9800' },
     { type: 'Coopératives', count: dist.cooperatives?.count || 0, percentage: parseInt(dist.cooperatives?.percentage) || 0, commission: dist.cooperatives?.caGenereted || 0, color: '#2196F3' },
     { type: 'Associations', count: dist.associations?.count || 0, percentage: parseInt(dist.associations?.percentage) || 0, commission: dist.associations?.caGenereted || 0, color: '#9C27B0' },
@@ -94,7 +94,7 @@ const memberLabel = computed(() => {
 <template>
   <div class="min-h-screen bg-background pb-24">
     <!-- Header -->
-    <div class="bg-gradient-to-br from-[#2D5016] via-[#2D5016] to-[#1a3009] text-white p-6">
+    <div class="bg-gradient-to-br from-primary via-primary-dark to-primary-darker text-white p-6">
       <div class="flex items-center gap-4 mb-6">
         <button @click="emit('back')" class="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
           <ArrowLeft class="w-5 h-5" />
@@ -103,7 +103,7 @@ const memberLabel = computed(() => {
           <h1 class="text-white text-2xl">Statistiques</h1>
           <p class="text-white/80 text-sm">{{ isInterprofession ? "Performance de l'interprofession" : "Performance de la structure" }}</p>
         </div>
-        <Button size="sm" class="bg-white text-[#2D5016] hover:bg-white/90">
+        <Button size="sm" class="bg-white text-primary hover:bg-white/90">
           <Download class="w-4 h-4 mr-2" />Export
         </Button>
       </div>
@@ -185,7 +185,7 @@ const memberLabel = computed(() => {
               <p class="text-2xl font-bold mb-1">{{ structure.count }}</p>
               <div class="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{{ structure.percentage }}% du total</span>
-                <span class="font-medium text-[#2D5016]">{{ (structure.commission / 1000000).toFixed(1) }}M F</span>
+                <span class="font-medium text-primary">{{ (structure.commission / 1000000).toFixed(1) }}M F</span>
               </div>
             </div>
           </div>
@@ -211,8 +211,8 @@ const memberLabel = computed(() => {
                   index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
                   index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
                   index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
-                  'bg-gradient-to-br from-[#2D5016] to-[#1a3009]'
-                ]">{{ index + 1 }}</div>
+                  'bg-gradient-to-br from-primary to-primary-dark'
+                ]">{{ Number(index) + 1 }}</div>
                 <div class="flex-1">
                   <div class="flex items-center justify-between mb-1">
                     <h4 class="font-medium">{{ product.name }}</h4>
@@ -226,7 +226,7 @@ const memberLabel = computed(() => {
                       <span>•</span>
                       <span>{{ product.nbCommandes }}</span>
                     </div>
-                    <span class="font-bold text-[#2D5016]">{{ (product.caGenere / 1000000).toFixed(1) }}M F</span>
+                    <span class="font-bold text-primary">{{ (product.caGenere / 1000000).toFixed(1) }}M F</span>
                   </div>
                 </div>
               </div>
@@ -237,7 +237,7 @@ const memberLabel = computed(() => {
         <!-- Top Members -->
         <Card class="p-6">
           <div class="flex items-center gap-3 mb-6">
-            <div class="w-10 h-10 bg-[#2D5016]/10 rounded-lg flex items-center justify-center"><Award class="w-5 h-5 text-[#2D5016]" /></div>
+            <div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center"><Award class="w-5 h-5 text-primary" /></div>
             <div>
               <h3 class="text-lg font-medium">{{ memberLabel }}</h3>
               <p class="text-sm text-muted-foreground">Commissions par {{ isInterprofession || isUnion ? 'structure' : isFederation ? 'union' : 'membre' }}</p>
@@ -247,10 +247,10 @@ const memberLabel = computed(() => {
             <div v-if="topMembersList.length === 0" class="text-center py-6 text-muted-foreground">
                Aucun membre enregistré pour cette période.
             </div>
-            <div v-for="(member, index) in topMembersList" :key="member.name" class="p-4 rounded-xl border-2 border-muted hover:border-[#2D5016]/30 hover:shadow-md transition-all">
+            <div v-for="(member, index) in topMembersList" :key="member.name" class="p-4 rounded-xl border-2 border-muted hover:border-primary/30 hover:shadow-md transition-all">
               <div class="flex items-start gap-3">
-                <div class="w-10 h-10 bg-gradient-to-br from-[#2D5016] to-[#1a3009] rounded-full flex items-center justify-center flex-shrink-0">
-                  <span class="text-white font-bold">{{ index + 1 }}</span>
+                <div class="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center flex-shrink-0">
+                  <span class="text-white font-bold">{{ Number(index) + 1 }}</span>
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center justify-between mb-2">
