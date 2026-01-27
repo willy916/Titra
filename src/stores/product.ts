@@ -45,7 +45,13 @@ export const useProductStore = defineStore('product', () => {
             const institutionRoles = ['cooperative', 'association', 'union', 'federation', 'interprofession']
             if (institutionRoles.includes(role)) {
                 // Replace /paysan/ with the actual institution role
-                return base.replace('/paysan/', `/${role}/`)
+                return base.replace('/api/paysan/', `/api/${role}/`)
+            }
+            if (role === 'processor') {
+                return base.replace('/api/paysan/', '/api/transform/')
+            }
+            if (role === 'merchant') {
+                return base.replace('/api/paysan/', '/api/commercant/')
             }
         }
         return base

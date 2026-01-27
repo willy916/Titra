@@ -113,16 +113,20 @@ async function handleNext() {
       toast.success('Profil complété avec succès !')
       emit('complete', formData.value)
     } catch (error: any) {
-      console.error('Registration error:', error)
-      const responseData = error.response?.data
-      if (responseData?.errors && Array.isArray(responseData.errors)) {
-        responseData.errors.forEach((err: any) => {
+      console.error('Registration error details:', error)
+      const data = error.response?.data
+      
+      if (data && typeof data === 'object' && !Array.isArray(data) && !data.message && !data.errors) {
+        Object.values(data).forEach((msg) => {
+          if (typeof msg === 'string') toast.error(msg)
+        })
+      } else if (data?.errors && Array.isArray(data.errors)) {
+        data.errors.forEach((err: any) => {
           toast.error(err.defaultMessage || 'Erreur de validation')
         })
-      } else if (responseData?.message) {
-        toast.error(responseData.message)
       } else {
-        toast.error('Une erreur est survenue lors de la création de votre profil')
+        const backendMessage = data?.message || data?.error || data?.body || (typeof data === 'string' ? data : null)
+        toast.error(backendMessage || "Une erreur est survenue lors de la création de votre profil")
       }
     }
   }

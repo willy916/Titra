@@ -15,6 +15,15 @@ export const useOrderStore = defineStore('order', () => {
             if (['cooperative', 'association', 'union', 'federation', 'interprofession'].includes(role)) {
                 return `/api/${role}/orders`
             }
+            if (role === 'processor') {
+                return '/api/transform/orders'
+            }
+            if (role === 'merchant') {
+                return '/api/commercant/orders'
+            }
+            if (role === 'consumer') {
+                return '/api/consommateur/orders'
+            }
         }
         return '/api/paysan/orders'
     }

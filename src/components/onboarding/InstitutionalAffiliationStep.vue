@@ -98,7 +98,7 @@ const formatLocation = (inst: Institution) => {
 
 const apiCooperatives = computed(() => institutions.value.cooperatives.map(c => ({
   id: c.id,
-  name: c.name,
+  name: c.name || 'Structure sans nom',
   type: 'cooperative',
   location: formatLocation(c),
   filiere: c.filiere?.libelle
@@ -106,7 +106,7 @@ const apiCooperatives = computed(() => institutions.value.cooperatives.map(c => 
 
 const apiAssociations = computed(() => institutions.value.associations.map(a => ({
   id: a.id,
-  name: a.name,
+  name: a.name || 'Structure sans nom',
   type: 'association',
   location: formatLocation(a),
   filiere: a.filiere?.libelle
@@ -114,7 +114,7 @@ const apiAssociations = computed(() => institutions.value.associations.map(a => 
 
 const apiUnions = computed(() => institutions.value.unions.map(u => ({
   id: u.id,
-  name: u.name,
+  name: u.name || 'Structure sans nom',
   type: 'union',
   location: formatLocation(u),
   filiere: u.filiere?.libelle
@@ -122,7 +122,7 @@ const apiUnions = computed(() => institutions.value.unions.map(u => ({
 
 const apiFederations = computed(() => institutions.value.federations.map(f => ({
   id: f.id,
-  name: f.name,
+  name: f.name || 'Structure sans nom',
   type: 'federation',
   location: formatLocation(f),
   filiere: f.filiere?.libelle
@@ -130,7 +130,7 @@ const apiFederations = computed(() => institutions.value.federations.map(f => ({
 
 const apiInterprofessions = computed(() => institutions.value.interprofessions.map(i => ({
   id: i.id,
-  name: i.name,
+  name: i.name || 'Structure sans nom',
   type: 'interprofession',
   location: formatLocation(i),
   filiere: i.filiere?.libelle
@@ -192,9 +192,11 @@ const affiliationInfo = computed(() => {
 })
 
 const filteredStructures = computed(() => {
-  return affiliationInfo.value.structures.filter((structure) =>
-    structure.name.toLowerCase().includes(searchTerm.value.toLowerCase())
-  )
+  const term = (searchTerm.value || '').toLowerCase()
+  return (affiliationInfo.value.structures || []).filter((structure) => {
+    const name = (structure?.name || '').toLowerCase()
+    return name.includes(term)
+  })
 })
 
 function handleSelect(structure: { id: string; name: string; type: string }) {

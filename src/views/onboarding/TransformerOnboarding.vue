@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { MapPin, Plus } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import Button from '@/components/ui/Button.vue'
@@ -8,57 +8,60 @@ import Label from '@/components/ui/Label.vue'
 import Select from '@/components/ui/Select.vue'
 import Progress from '@/components/ui/Progress.vue'
 import Badge from '@/components/ui/Badge.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useTransformerStore } from '@/stores/transformer'
 
 interface FormData {
   firstName: string
   lastName: string
   workshopName: string
   location: string
-  filiere: string
-  customFiliere: string
+  filiereId: string
   productsTransformed: string[]
   customProducts: string[]
   capacity: string
   capacityUnit: string
-  customCapacityUnit: string
   certification: string
 }
 
-import { useAuthStore } from '@/stores/auth'
-
 const emit = defineEmits<{
-  complete: [data: FormData]
+  complete: [data: any]
 }>()
 
 const authStore = useAuthStore()
+const transformerStore = useTransformerStore()
+
 const step = ref(authStore.user?.currentOnboardingStep || 1)
 const formData = ref<FormData>({
   firstName: '',
   lastName: '',
   workshopName: '',
   location: '',
-  filiere: '',
-  customFiliere: '',
+  filiereId: '',
   productsTransformed: [],
   customProducts: [],
   capacity: '',
   capacityUnit: 'kg/mois',
-  customCapacityUnit: '',
   certification: '',
 })
 
 const newProductInput = ref('')
 const progress = computed(() => (step.value / 3) * 100)
 
-const filiereOptions = [
-  { value: 'manioc', label: 'Manioc' },
-  { value: 'cacao', label: 'Cacao' },
-  { value: 'palmier', label: 'Palmier à huile' },
-  { value: 'karite', label: 'Karité' },
-  { value: 'fruits', label: 'Fruits' },
-  { value: 'cereales', label: 'Céréales' },
-  { value: 'autre', label: 'Autre' },
-]
+onMounted(async () => {
+  try {
+    await transformerStore.fetchFilieres()
+  } catch (error) {
+    toast.error('Erreur lors de la récupération des filières')
+  }
+})
+
+const filiereOptions = computed(() => 
+  transformerStore.filieres.map(f => ({
+    value: f.id,
+    label: f.libelle
+  }))
+)
 
 const capacityUnitOptions = [
   { value: 'kg/mois', label: 'kg/mois' },
@@ -68,24 +71,11 @@ const capacityUnitOptions = [
   { value: 'unités/mois', label: 'unités/mois' },
   { value: 'kg/an', label: 'kg/an' },
   { value: 'tonnes/an', label: 'tonnes/an' },
-  { value: 'custom', label: 'Autre' },
 ]
 
-const productsByFiliere: Record<string, string[]> = {
-  manioc: ['Attiéké', 'Gari', 'Farine de manioc', 'Tapioca', 'Placali', 'Chips de manioc'],
-  cacao: ['Poudre de cacao', 'Beurre de cacao', 'Chocolat noir', 'Chocolat au lait', 'Liqueur de cacao'],
-  palmier: ['Huile de palme rouge', 'Huile de palme raffinée', 'Savon noir', 'Tourteau de palmiste'],
-  karite: ['Beurre de karité', 'Savon de karité', 'Huile de karité', 'Crème de karité'],
-  fruits: ['Jus de fruits', 'Confiture', 'Fruits séchés', 'Purée de fruits', 'Sirop de fruits'],
-  cereales: ['Farine de maïs', 'Farine de mil', 'Farine de sorgho', 'Couscous', 'Semoule'],
-  autre: []
-}
-
-const transformedProducts = computed(() => {
-  if (formData.value.filiere === 'autre' && formData.value.customFiliere) {
-    return []
-  }
-  return productsByFiliere[formData.value.filiere] || []
+const suggestedProducts = computed(() => {
+  const selectedFiliere = transformerStore.filieres.find(f => f.id === formData.value.filiereId)
+  return selectedFiliere?.produits || []
 })
 
 function handleBack() {
@@ -101,11 +91,42 @@ async function handleNext() {
     authStore.setOnboardingStep(step.value)
   } else {
     try {
-      await authStore.completeTransformerProfile(formData.value)
+      const payload = {
+        firstName: formData.value.firstName,
+        lastName: formData.value.lastName,
+        nomAtelier: formData.value.workshopName,
+        addresse: formData.value.location,
+        filiereId: formData.value.filiereId,
+        productionCapacity: parseInt(formData.value.capacity) || 0,
+        productionUnit: formData.value.capacityUnit,
+        productName: [...formData.value.productsTransformed],
+        agrement: formData.value.certification
+      }
+      
+      const response = await transformerStore.completeProfile(payload)
       toast.success('Profil transformateur créé avec succès !')
-      emit('complete', formData.value)
-    } catch (error) {
-      toast.error("Erreur lors de la création du profil")
+      
+      // Update local user state
+      if (authStore.user) {
+        authStore.user.name = `${payload.firstName} ${payload.lastName}`
+        authStore.user.onboardingCompleted = true
+        authStore.user.matricule = response.matricule || response.code // Server returns matricule according to doc
+        localStorage.setItem('user', JSON.stringify(authStore.user))
+      }
+      
+      emit('complete', response)
+    } catch (error: any) {
+      console.error("Transformer profile creation error details:", error)
+      const data = error.response?.data
+      
+      if (data && typeof data === 'object' && !Array.isArray(data) && !data.message) {
+        Object.values(data).forEach((msg) => {
+          if (typeof msg === 'string') toast.error(msg)
+        })
+      } else {
+        const backendMessage = data?.message || data?.error || data?.body || (typeof data === 'string' ? data : null)
+        toast.error(backendMessage || "Erreur lors de la création du profil transformateur")
+      }
     }
   }
 }
@@ -118,9 +139,14 @@ function toggleProduct(product: string) {
 
 function addCustomProduct() {
   if (newProductInput.value.trim()) {
-    formData.value.customProducts.push(newProductInput.value.trim())
-    formData.value.productsTransformed.push(newProductInput.value.trim())
-    toast.success(`${newProductInput.value.trim()} ajouté à vos produits`)
+    const product = newProductInput.value.trim()
+    if (!formData.value.customProducts.includes(product)) {
+      formData.value.customProducts.push(product)
+    }
+    if (!formData.value.productsTransformed.includes(product)) {
+      formData.value.productsTransformed.push(product)
+    }
+    toast.success(`${product} ajouté à vos produits`)
     newProductInput.value = ''
   }
 }
@@ -130,13 +156,12 @@ function removeCustomProduct(product: string) {
   formData.value.productsTransformed = formData.value.productsTransformed.filter(p => p !== product)
 }
 
-function getFiliereLabel(value: string) {
-  if (value === 'palmier') return 'Palmier à huile'
-  return value.charAt(0).toUpperCase() + value.slice(1)
+function getFiliereLabel(id: string) {
+  return transformerStore.filieres.find(f => f.id === id)?.libelle || ''
 }
 
 const isStep1Valid = computed(() => formData.value.firstName && formData.value.lastName && formData.value.workshopName)
-const isStep2Valid = computed(() => formData.value.location && formData.value.filiere && (formData.value.filiere !== 'autre' || formData.value.customFiliere))
+const isStep2Valid = computed(() => formData.value.location && formData.value.filiereId && formData.value.capacity)
 const isStep3Valid = computed(() => formData.value.productsTransformed.length > 0)
 </script>
 
@@ -186,12 +211,7 @@ const isStep3Valid = computed(() => formData.value.productsTransformed.length > 
 
         <div class="space-y-2">
           <Label for="filiere">Filière principale</Label>
-          <Select v-model="formData.filiere" :options="filiereOptions" placeholder="Sélectionnez votre filière" />
-        </div>
-
-        <div v-if="formData.filiere === 'autre'" class="space-y-2">
-          <Label for="customFiliere">Précisez votre filière</Label>
-          <Input id="customFiliere" v-model="formData.customFiliere" placeholder="Ex: Coton" />
+          <Select v-model="formData.filiereId" :options="filiereOptions" placeholder="Sélectionnez votre filière" />
         </div>
 
         <div class="space-y-2">
@@ -200,11 +220,6 @@ const isStep3Valid = computed(() => formData.value.productsTransformed.length > 
             <Input id="capacity" v-model="formData.capacity" type="number" placeholder="Ex: 5000" class="flex-1" />
             <Select v-model="formData.capacityUnit" :options="capacityUnitOptions" class="w-[140px]" />
           </div>
-        </div>
-
-        <div v-if="formData.capacityUnit === 'custom'" class="space-y-2">
-          <Label for="customCapacityUnit">Précisez l'unité</Label>
-          <Input id="customCapacityUnit" v-model="formData.customCapacityUnit" placeholder="Ex: Caisses/semaine, Bidons/mois..." />
         </div>
 
         <div class="flex gap-2">
@@ -239,16 +254,16 @@ const isStep3Valid = computed(() => formData.value.productsTransformed.length > 
         </div>
 
         <!-- Standard products -->
-        <div v-if="transformedProducts.length > 0" class="space-y-2">
-          <Label>Produits standards pour {{ getFiliereLabel(formData.filiere) }}</Label>
+        <div v-if="suggestedProducts.length > 0" class="space-y-2">
+          <Label>Produits standards pour {{ getFiliereLabel(formData.filiereId) }}</Label>
           <div class="flex flex-wrap gap-2">
-            <Badge v-for="product in transformedProducts" :key="product" :variant="formData.productsTransformed.includes(product) ? 'default' : 'outline'" class="cursor-pointer" @click="toggleProduct(product)">
+            <Badge v-for="product in suggestedProducts" :key="product" :variant="formData.productsTransformed.includes(product) ? 'default' : 'outline'" class="cursor-pointer" @click="toggleProduct(product)">
               {{ product }}
             </Badge>
           </div>
         </div>
 
-        <div v-if="transformedProducts.length === 0 && formData.filiere === 'autre'" class="bg-muted/50 p-4 rounded-lg border border-dashed">
+        <div v-else class="bg-muted/50 p-4 rounded-lg border border-dashed">
           <p class="text-sm text-muted-foreground text-center">Aucun produit standard pour cette filière. Utilisez le champ ci-dessus pour ajouter vos produits.</p>
         </div>
 
@@ -259,7 +274,7 @@ const isStep3Valid = computed(() => formData.value.productsTransformed.length > 
 
         <div class="flex gap-2">
           <Button variant="outline" class="flex-1" @click="handleBack">Retour</Button>
-          <Button class="flex-1" :disabled="!isStep3Valid" @click="handleNext">Terminer</Button>
+          <Button class="flex-1" :disabled="!isStep3Valid" :isLoading="transformerStore.isLoading" @click="handleNext">Terminer</Button>
         </div>
       </div>
     </div>

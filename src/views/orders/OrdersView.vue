@@ -11,20 +11,50 @@ const emit = defineEmits<{ back: []; navigate: [screen: string, data?: any] }>()
 
 const orderStore = useOrderStore()
 const isLoading = ref(true)
-const activeTab = ref('preparing')
+
+const tabs = computed(() => {
+  if (props.userRole === 'processor' || props.userRole === 'merchant') {
+    return [
+      { id: 'pending', label: 'En attente' },
+      { id: 'preparing', label: 'Préparation' },
+      { id: 'shipped', label: 'En route' },
+      { id: 'delivered', label: 'Livrées' },
+      { id: 'cancelled', label: 'Annulées' }
+    ]
+  }
+  return [
+    { id: 'preparing', label: 'Préparation' },
+    { id: 'in_progress', label: 'En cours' },
+    { id: 'delivered', label: 'Livrées' },
+    { id: 'cancelled', label: 'Annulées' }
+  ]
+})
+
+const activeTab = ref(props.userRole === 'processor' || props.userRole === 'merchant' ? 'pending' : 'preparing')
 
 // Map UI tabs to API statuses
-const statusMap: Record<string, string> = {
-  preparing: 'EN_PREPARATION',
-  in_progress: 'EN_COURS',
-  delivered: 'LIVREE',
-  cancelled: 'ANNULEE'
-}
+const statusMap = computed<Record<string, string>>(() => {
+  if (props.userRole === 'processor' || props.userRole === 'merchant') {
+    return {
+      pending: 'EN_ATTENTE',
+      preparing: 'EN_PREPARATION',
+      shipped: 'EN_COURS',
+      delivered: 'LIVREE',
+      cancelled: 'ANNULEE'
+    }
+  }
+  return {
+    preparing: 'EN_PREPARATION',
+    in_progress: 'EN_COURS',
+    delivered: 'LIVREE',
+    cancelled: 'ANNULEE'
+  }
+})
 
 async function loadOrders() {
   isLoading.value = true
   try {
-    await orderStore.fetchMyOrders(statusMap[activeTab.value])
+    await orderStore.fetchMyOrders(statusMap.value[activeTab.value])
   } catch (error) {
     console.error('Error loading orders:', error)
     toast.error('Erreur lors du chargement des commandes')
@@ -37,8 +67,9 @@ onMounted(loadOrders)
 watch(activeTab, loadOrders)
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  'EN_PREPARATION': { label: 'En préparation', color: 'bg-amber-500' },
-  'EN_COURS': { label: 'En cours de livraison', color: 'bg-blue-500' },
+  'EN_ATTENTE': { label: 'En attente', color: 'bg-amber-400' },
+  'EN_PREPARATION': { label: 'En préparation', color: 'bg-amber-600' },
+  'EN_COURS': { label: 'Expédiée', color: 'bg-blue-600' },
   'LIVREE': { label: 'Livrée', color: 'bg-green-600' },
   'ANNULEE': { label: 'Annulée', color: 'bg-destructive' },
 }
@@ -53,7 +84,7 @@ const mappedOrders = computed(() => {
     orderNumber: o.orderNumber || `CMD-${o.id.slice(0, 8)}`,
     date: o.orderDate ? new Date(o.orderDate) : new Date(),
     status: o.orderStatus,
-    buyerName: o.buyerName || 'Client inconnu',
+    buyerName: o.customerName || o.buyerName || 'Client inconnu',
     total: o.totalAmount || 0,
     product: o.product, // { nom, categorie, photos: [] }
     quantity: o.quantity || 0,
@@ -62,8 +93,10 @@ const mappedOrders = computed(() => {
 })
 
 const emptyMessages: Record<string, string> = {
+  pending: 'Aucune commande en attente',
   preparing: 'Aucune commande en préparation',
   in_progress: 'Aucune commande en cours de livraison',
+  shipped: 'Aucune commande expédiée',
   delivered: 'Aucune commande livrée',
   cancelled: 'Aucune commande annulée',
 }
@@ -80,17 +113,17 @@ const emptyMessages: Record<string, string> = {
       </div>
 
       <!-- Tabs -->
-      <div class="grid grid-cols-4 border-t">
+      <div :class="['grid border-t', tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4']">
         <button
-          v-for="tab in ['preparing', 'in_progress', 'delivered', 'cancelled']"
-          :key="tab"
-          @click="activeTab = tab"
+          v-for="tab in tabs"
+          :key="tab.id"
+          @click="activeTab = tab.id"
           :class="[
             'py-3 text-[10px] sm:text-xs font-medium transition-colors',
-            activeTab === tab ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
+            activeTab === tab.id ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
           ]"
         >
-          {{ tab === 'preparing' ? 'Préparation' : tab === 'in_progress' ? 'En cours' : tab === 'delivered' ? 'Livrées' : 'Annulées' }}
+          {{ tab.label }}
         </button>
       </div>
     </div>

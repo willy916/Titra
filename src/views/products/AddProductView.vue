@@ -11,7 +11,7 @@ import { toast } from 'vue-sonner'
 import { useProductStore } from '@/stores/product'
 import { useAuthStore } from '@/stores/auth'
 
-const props = defineProps<{ userRole: 'farmer' | 'processor' | 'cooperative' | 'association' | 'union' | 'federation' | 'interprofession' }>()
+const props = defineProps<{ userRole: 'farmer' | 'processor' | 'merchant' | 'cooperative' | 'association' | 'union' | 'federation' | 'interprofession' }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 
 const productStore = useProductStore()
@@ -33,8 +33,15 @@ const formData = ref({
 
 const farmerCategories = ['Tubercules', 'Céréales', 'Légumes', 'Fruits', 'Épices', 'Légumineuses']
 const processorCategories = ['Produits transformés', 'Farines', 'Huiles', 'Conserves', 'Jus et boissons', 'Condiments']
-const categories = props.userRole === 'processor' ? processorCategories : farmerCategories
-const units = ['kg', 'tonne', 'litre', 'unité', 'sac']
+const merchantCategories = ['Gros & Détail', 'Produits Secs', 'Produits Frais', 'Épicerie', 'Boissons', 'Divers']
+
+const categories = computed(() => {
+  if (props.userRole === 'processor') return processorCategories
+  if (props.userRole === 'merchant') return merchantCategories
+  return farmerCategories
+})
+
+const units = ['kg', 'tonne', 'litre', 'unité', 'sac', 'bouteille', 'carton']
 
 async function handleFileUpload(event: Event) {
   const target = event.target as HTMLInputElement
@@ -106,7 +113,7 @@ async function handleSubmit() {
           <ArrowLeft class="w-5 h-5" />
         </button>
         <h1 class="text-white text-2xl">
-          {{ userRole === 'processor' ? 'Ajouter un produit transformé' : (isInstitution ? 'Ajouter un produit structure' : 'Ajouter un produit') }}
+          {{ userRole === 'processor' ? 'Ajouter un produit transformé' : (userRole === 'merchant' ? 'Ajouter un produit boutique' : (isInstitution ? 'Ajouter un produit structure' : 'Ajouter un produit')) }}
         </h1>
       </div>
     </div>

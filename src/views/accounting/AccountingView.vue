@@ -9,26 +9,40 @@ import Select from '@/components/ui/Select.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import type { UserRole } from '@/types'
 import { usePaysanStore } from '@/stores/paysan'
+import { useTransformerStore } from '@/stores/transformer'
+import { useMerchantStore } from '@/stores/merchant'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{ userRole: UserRole }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 
 const paysanStore = usePaysanStore()
+const transformerStore = useTransformerStore()
+const merchantStore = useMerchantStore()
+
 const activeTab = ref('all')
 const isLoading = ref(false)
 const showEntryModal = ref(false)
 
+const isProcessor = computed(() => props.userRole === 'processor')
+const isMerchant = computed(() => props.userRole === 'merchant')
+
+const store = computed(() => {
+  if (isProcessor.value) return transformerStore
+  if (isMerchant.value) return merchantStore
+  return paysanStore
+})
+
 // Form for new entry
 const entryForm = ref({
   type: 'EXPENSE' as 'EXPENSE' | 'REVENUE',
-  categorie: 'INTRANTS',
+  categorie: isProcessor.value ? 'ACHAT_INTRANTS' : (isMerchant.value ? 'LOYER' : 'INTRANTS'),
   libelle: '',
   montant: '',
   description: ''
 })
 
-const categoriesData = {
+const paysanCategories = {
   REVENUE: [
     { value: 'VENTE_PRODUITS', label: 'Vente de produits' },
     { value: 'AUTRE', label: 'Autre revenu' }
@@ -43,14 +57,57 @@ const categoriesData = {
   ]
 }
 
+const processorCategories = {
+  REVENUE: [
+    { value: 'VENTE_PRODUITS', label: 'Vente de produits' },
+    { value: 'SUBVENTION', label: 'Subvention' },
+    { value: 'AUTRE_ENTREE', label: 'Autre entrée' }
+  ],
+  EXPENSE: [
+    { value: 'ACHAT_INTRANTS', label: 'Matières premières' },
+    { value: 'SALAIRES', label: 'Salaires' },
+    { value: 'TRANSPORT', label: 'Transport' },
+    { value: 'LOYER', label: 'Loyer' },
+    { value: 'ELECTRICITE_EAU', label: 'Électricité / Eau' },
+    { value: 'ENTRETIEN', label: 'Entretien' },
+    { value: 'AUTRE_DEPENSE', label: 'Autre dépense' }
+  ]
+}
+
+const merchantCategories = {
+  REVENUE: [
+    { value: 'VENTE_PRODUITS', label: 'Vente de produits' },
+    { value: 'SUBVENTION', label: 'Subvention / Aide' },
+    { value: 'AUTRE', label: 'Autre' }
+  ],
+  EXPENSE: [
+    { value: 'SALAIRES', label: 'Salaires du personnel' },
+    { value: 'LOYER', label: 'Loyer de la boutique' },
+    { value: 'ELECTRICITE_EAU', label: 'Électricité et Eau' },
+    { value: 'TRANSPORT', label: 'Transport et Livraisons' },
+    { value: 'ACHAT_MATERIAUX', label: 'Matériels / Emballages' },
+    { value: 'ENTRETIEN', label: 'Entretien / Réparations' },
+    { value: 'MAIN_DOEUVRE', label: "Main d'œuvre ponctuelle" },
+    { value: 'AUTRE', label: 'Autre' }
+  ]
+}
+
+const categoriesData = computed(() => {
+  if (isProcessor.value) return processorCategories
+  if (isMerchant.value) return merchantCategories
+  return paysanCategories
+})
+
 onMounted(async () => {
   const needsData = props.userRole === 'farmer' || 
+    props.userRole === 'processor' ||
+    props.userRole === 'merchant' ||
     ['cooperative', 'association', 'union', 'federation', 'interprofession'].includes(props.userRole)
 
   if (needsData) {
     isLoading.value = true
     try {
-      await paysanStore.fetchAccountingDashboard()
+      await store.value.fetchAccountingDashboard()
     } catch (e) {
       toast.error('Erreur lors du chargement des données comptables')
     } finally {
@@ -66,7 +123,7 @@ async function handleAddEntry() {
   }
 
   try {
-    await paysanStore.addAccountingEntry({
+    await store.value.addAccountingEntry({
       type: entryForm.value.type,
       categorie: entryForm.value.categorie,
       libelle: entryForm.value.libelle,
@@ -78,7 +135,7 @@ async function handleAddEntry() {
     // Reset form
     entryForm.value = {
       type: 'EXPENSE',
-      categorie: 'INTRANTS',
+      categorie: isProcessor.value ? 'ACHAT_INTRANTS' : (isMerchant.value ? 'LOYER' : 'INTRANTS'),
       libelle: '',
       montant: '',
       description: ''
@@ -88,32 +145,57 @@ async function handleAddEntry() {
   }
 }
 
-const accountingDashboard = computed(() => paysanStore.accountingDashboard || {
-  totalRevenus: 0,
-  tendanceRevenus: "0% ce mois",
-  totalDepenses: 0,
-  tendanceDepenses: "0% ce mois",
-  beneficeNet: 0,
-  tendanceBenefice: "0% ce mois",
-  entries: []
+const accountingDashboard = computed(() => {
+  const base = store.value.accountingDashboard
+  if (!base) return {
+    totalRevenus: 0,
+    tendanceRevenus: "0% ce mois",
+    totalDepenses: 0,
+    tendanceDepenses: "0% ce mois",
+    beneficeNet: 0,
+    tendanceBenefice: "0% ce mois",
+    entries: []
+  }
+
+  if (isProcessor.value || isMerchant.value) {
+    return {
+      totalRevenus: base.totalRevenue || 0,
+      tendanceRevenus: base.revenueTrend || "0% ce mois",
+      totalDepenses: base.totalExpenses || 0,
+      tendanceDepenses: base.expenseTrend || "0% ce mois",
+      beneficeNet: base.netProfit || 0,
+      tendanceBenefice: base.profitTrend || "0% ce mois",
+      entries: base.recentEntries || []
+    }
+  }
+
+  return {
+    totalRevenus: base.totalRevenus || 0,
+    tendanceRevenus: base.tendanceRevenus || "0% ce mois",
+    totalDepenses: base.totalDepenses || 0,
+    tendanceDepenses: base.tendanceDepenses || "0% ce mois",
+    beneficeNet: base.beneficeNet || 0,
+    tendanceBenefice: base.tendanceBenefice || "0% ce mois",
+    entries: base.entries || []
+  }
 })
 
 const getAccountingData = () => {
-  const isInstitutional = ['farmer', 'cooperative', 'association', 'union', 'federation', 'interprofession'].includes(props.userRole)
+  const isInstitutional = ['farmer', 'processor', 'merchant', 'cooperative', 'association', 'union', 'federation', 'interprofession'].includes(props.userRole)
   
   if (isInstitutional) {
      return {
         metrics: [
-          { label: 'Revenus (Ventes)', value: accountingDashboard.value.totalRevenus || 0, trend: accountingDashboard.value.tendanceRevenus, icon: TrendingUp, color: 'success' },
-          { label: 'Dépenses et Charges', value: accountingDashboard.value.totalDepenses || 0, trend: accountingDashboard.value.tendanceDepenses, icon: Sprout, color: 'destructive' },
+          { label: 'Revenus', value: accountingDashboard.value.totalRevenus || 0, trend: accountingDashboard.value.tendanceRevenus, icon: TrendingUp, color: 'success' },
+          { label: 'Dépenses', value: accountingDashboard.value.totalDepenses || 0, trend: accountingDashboard.value.tendanceDepenses, icon: Sprout, color: 'destructive' },
           { label: 'Bénéfice net', value: accountingDashboard.value.beneficeNet || 0, trend: accountingDashboard.value.tendanceBenefice, icon: FileText, color: 'primary' },
         ],
         transactions: (accountingDashboard.value.entries || []).map((e: any) => ({
            id: e.id,
            date: e.date || e.entryDate,
-           type: (e.formatType || e.type || '').split('_')[0].toLowerCase(), 
+           type: (e.type || '').split('_')[0].toLowerCase(), 
            category: e.categorie,
-           amount: e.montant,
+           amount: e.montant || e.amount || 0,
            description: e.libelle
         }))
      }

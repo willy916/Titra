@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Avatar from '@/components/ui/Avatar.vue'
 import { useMarketplaceStore } from '@/stores/marketplace'
+import { useChatStore } from '@/stores/chat'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{ product: any }>()
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const marketplaceStore = useMarketplaceStore()
+const chatStore = useChatStore()
 const quantity = ref(1)
 const currentImageIndex = ref(0)
 const isLoading = ref(false)
@@ -25,16 +27,29 @@ async function fetchFullDetails() {
   isLoading.value = true
   try {
     const data = await marketplaceStore.fetchProductDetails(props.product.type, props.product.id)
-    // Map API fields to UI fields
+    
+    // Robust image mapping
+    let productImages = []
+    if (data.photos && Array.isArray(data.photos) && data.photos.length > 0) {
+      productImages = data.photos
+    } else if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+      productImages = data.images
+    } else if (data.image) {
+      productImages = [data.image]
+    } else {
+      productImages = ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=400&fit=crop']
+    }
+    
     fullProduct.value = {
       ...data,
       name: data.nom || data.name,
       prix: data.prix || data.price,
       unite: data.unite || data.unit,
       categorie: data.categorie || data.category,
-      images: (data.photos && data.photos.length > 0) ? data.photos : (data.images || ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=400&fit=crop']),
+      images: productImages,
       seller: {
         name: data.vendeur?.nom || data.seller?.name || 'Vendeur Inconnu',
+        phoneNumber: data.vendeur?.phoneNumber || data.vendeur?.telephone || data.seller?.phoneNumber || data.vendeur?.phone || data.seller?.phone,
         matricule: data.vendeur?.matricule || data.seller?.matricule,
         cooperative: data.vendeur?.cooperative || data.seller?.cooperative,
         location: data.vendeur?.localisation || data.seller?.location,
@@ -45,7 +60,6 @@ async function fetchFullDetails() {
     }
   } catch (error) {
     console.error('Error fetching product details:', error)
-    // Fallback but ensure structure
     fullProduct.value = {
       ...props.product,
       seller: props.product.seller || { name: 'Mon Profil' }
@@ -56,30 +70,33 @@ async function fetchFullDetails() {
 }
 
 onMounted(() => {
-  // If navigating from "my-products", utilize the passed product object directly
-  // This avoids calling the generic marketplace API which might not find private/coop products
-  const fromSource = (props.product as any).fromSource || (props.product as any)._fromSource // or check route params if available
-  
-  // Actually, we can check if it has detailed fields already or just try fetch
-  // Better yet, rely on the caller passing a flag or just use the prop if it looks complete
-  // For now, let's fix the specific issue: Coop products from "My Products"
-  
   if (props.product?.type === 'PAYSAN' && props.product?.id && !props.product._raw) {
-     // Authentic marketplace fetch
      fetchFullDetails()
   } else {
-     // It's likely from My Products or already full
-     // Map existing props to fullProduct
      const p = props.product
+     
+     // Robust image mapping for local products
+     let productImages = []
+     if (p.photos && Array.isArray(p.photos) && p.photos.length > 0) {
+       productImages = p.photos
+     } else if (p.images && Array.isArray(p.images) && p.images.length > 0) {
+       productImages = p.images
+     } else if (p.image) {
+       productImages = [p.image]
+     } else {
+       productImages = ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=400&fit=crop']
+     }
+     
      fullProduct.value = {
         ...p,
         name: p.nom || p.name,
         prix: p.prix || p.price,
         unite: p.unite || p.unit,
         categorie: p.categorie || p.category,
-        images: (p.photos && p.photos.length > 0) ? p.photos : (p.images || p.image ? [p.image] : ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&h=400&fit=crop']),
+        images: productImages,
         seller: p.seller || { 
-            name: 'Mon Profil', // Default for self-view
+            name: 'Mon Profil',
+            phoneNumber: p.seller?.phoneNumber || p.vendeur?.phoneNumber || p.phoneNumber,
             location: p.localisation || 'Ma localité'
         },
         verified: true,
@@ -96,6 +113,25 @@ function handleAddToCart() {
 function getInitials(name: string) {
   if (!name) return '?'
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+}
+
+async function handleContactSeller() {
+  if (!fullProduct.value?.seller?.phoneNumber) {
+    toast.error('Numéro de téléphone du vendeur non disponible')
+    return
+  }
+
+  try {
+    const conversation = await chatStore.startConversation(
+      fullProduct.value.seller.phoneNumber,
+      props.product.id,
+      'PRODUCT'
+    )
+    emit('navigate', 'chat', { conversation })
+  } catch (error) {
+    console.error('Failed to start conversation:', error)
+    toast.error('Impossible de démarrer la conversation')
+  }
 }
 </script>
 
@@ -236,7 +272,7 @@ function getInitials(name: string) {
         </div>
 
         <div class="flex gap-3">
-          <Button variant="outline" class="flex-1 h-12" @click="emit('navigate', 'chat', { user: fullProduct.seller })">
+          <Button variant="outline" class="flex-1 h-12" @click="handleContactSeller">
             <MessageSquare class="w-4 h-4 mr-2" />Contacter
           </Button>
           <Button class="flex-1 bg-primary h-12" @click="handleAddToCart">

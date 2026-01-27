@@ -7,15 +7,19 @@ import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Select from '@/components/ui/Select.vue'
 import { useMarketplaceStore } from '@/stores/marketplace'
+import { useChatStore } from '@/stores/chat'
 import { toast } from 'vue-sonner'
+import { MessageSquare } from 'lucide-vue-next'
 
+const props = defineProps<{ initialData?: any }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string, data?: any] }>()
 
 const marketplaceStore = useMarketplaceStore()
+const chatStore = useChatStore()
 const searchQuery = ref('')
-const selectedCategory = ref('all')
-const selectedLocation = ref('all')
-const selectedSellerType = ref<string>('Tous')
+const selectedCategory = ref(props.initialData?.category || 'all')
+const selectedLocation = ref(props.initialData?.location || 'all')
+const selectedSellerType = ref<string>(props.initialData?.sellerType || 'Tous')
 const isLoading = ref(true)
 const showFilters = ref(false)
 
@@ -68,6 +72,7 @@ const products = computed(() => {
     location: p.localisation,
     seller: {
       name: p.vendeur?.nom || 'Vendeur Inconnu',
+      phoneNumber: p.vendeur?.phoneNumber || p.vendeur?.telephone || p.vendeur?.phone || p.vendeur?.cellulaire || p.phoneNumber || p.telephone || p.phone || p.cellulaire,
       type: p.vendeur?.type,
       location: p.vendeur?.localisation,
       rating: p.vendeur?.note || 4.5,
@@ -83,6 +88,24 @@ function resetFilters() {
   selectedCategory.value = 'all'
   selectedLocation.value = 'all'
   selectedSellerType.value = 'Tous'
+}
+
+async function handleContactClick(product: any, event: Event) {
+  event.stopPropagation()
+  
+  const phone = product.seller?.phoneNumber || product.vendeur?.phoneNumber
+  if (!phone) {
+    toast.error('Numéro du vendeur non disponible')
+    return
+  }
+
+  try {
+    const conversation = await chatStore.startConversation(phone, product.id, 'PRODUCT')
+    emit('navigate', 'chat', { conversation })
+  } catch (error) {
+    console.error('Failed to start chat:', error)
+    toast.error('Erreur lors du démarrage du chat')
+  }
 }
 </script>
 
@@ -280,9 +303,17 @@ function resetFilters() {
                     <p class="font-semibold text-primary">{{ product.price.toLocaleString() }}</p>
                     <span class="text-xs text-muted-foreground">FCFA/{{ product.unit }}</span>
                   </div>
-                  <div v-if="product.seller.rating" class="flex items-center gap-1">
-                    <Star class="w-3 h-3 fill-secondary text-secondary" />
-                    <span class="text-xs">{{ product.seller.rating }}</span>
+                  <div class="flex items-center gap-2">
+                    <button 
+                      @click.stop="handleContactClick(product, $event)"
+                      class="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-white transition-colors"
+                    >
+                      <MessageSquare class="w-3.5 h-3.5" />
+                    </button>
+                    <div v-if="product.seller.rating" class="flex items-center gap-1">
+                      <Star class="w-3 h-3 fill-secondary text-secondary" />
+                      <span class="text-xs">{{ product.seller.rating }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -324,16 +355,24 @@ function resetFilters() {
                 <MapPin class="w-3 h-3 text-muted-foreground" />
                 <span class="text-xs text-muted-foreground line-clamp-1">{{ product.seller.location }}</span>
               </div>
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="font-semibold text-primary">{{ product.price.toLocaleString() }}</p>
-                  <span class="text-xs text-muted-foreground">FCFA/{{ product.unit }}</span>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="font-semibold text-primary text-sm">{{ product.price.toLocaleString() }}</p>
+                    <span class="text-[10px] text-slate-400">FCFA/{{ product.unit }}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button 
+                      @click.stop="handleContactClick(product, $event)"
+                      class="p-1.5 bg-primary/10 text-primary rounded-lg active:scale-95"
+                    >
+                      <MessageSquare class="w-3.5 h-3.5" />
+                    </button>
+                    <div v-if="product.seller.rating" class="flex items-center gap-1">
+                      <Star class="w-2.5 h-2.5 fill-secondary text-secondary" />
+                      <span class="text-[10px] font-bold">{{ product.seller.rating }}</span>
+                    </div>
+                  </div>
                 </div>
-                <div v-if="product.seller.rating" class="flex items-center gap-1">
-                  <Star class="w-3 h-3 fill-secondary text-secondary" />
-                  <span class="text-xs">{{ product.seller.rating }}</span>
-                </div>
-              </div>
             </div>
           </Card>
         </template>

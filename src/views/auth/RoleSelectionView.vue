@@ -131,16 +131,26 @@ const roles: Role[] = [
   },
 ]
 
-// Filter roles based on what the API returned (matching label or name)
+const roleMapping: Record<string, string> = {
+  farmer: 'PAYSAN',
+  processor: 'TRANSFORMATEUR',
+  merchant: 'COMMERCANT',
+  transporter: 'TRANSPORTEUR',
+  consumer: 'CONSOMMATEUR',
+  independent: 'FORMATION',
+  cooperative: 'COOPERATIVE',
+  association: 'ASSOCIATION',
+  union: 'UNION',
+  federation: 'FEDERATION',
+  interprofession: 'INTERPROFESSION'
+}
+
+// Filter roles based on what the API returned
 const filteredRoles = computed(() => {
   if (availableRoleNames.value.length === 0) return roles
   return roles.filter(r => {
-    // On compare le label local avec les noms renvoyés par l'API
-    // gestion du cas particulier "Interprofession" / "Interprofessionnalité"
-    if (r.id === 'interprofession') {
-      return availableRoleNames.value.some(name => name.includes('Interprofession'))
-    }
-    return availableRoleNames.value.includes(r.label)
+    const apiName = roleMapping[r.id]
+    return availableRoleNames.value.includes(apiName)
   })
 })
 
@@ -155,11 +165,10 @@ function selectRole(roleId: UserRole) {
 async function handleContinue() {
   if (selectedRole.value) {
     try {
-      // On récupère le rôle complet pour envoyer son label exact (nom) au backend
-      const roleObj = roles.find(r => r.id === selectedRole.value)
-      const roleNameToSend = roleObj?.id === 'interprofession' ? 'Interprofessionnalité' : (roleObj?.label || '')
+      // On récupère le nom exact attendu par l'API via le mapping
+      const apiName = roleMapping[selectedRole.value]
       
-      await authStore.setAnyRole(roleNameToSend)
+      await authStore.setAnyRole(apiName)
       emit('select-role', selectedRole.value)
     } catch (error) {
       toast.error('Erreur lors du choix du rôle')

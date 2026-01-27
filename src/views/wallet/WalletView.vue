@@ -5,18 +5,31 @@ import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import type { User } from '@/types'
 import { usePaysanStore } from '@/stores/paysan'
+import { useTransformerStore } from '@/stores/transformer'
+import { useMerchantStore } from '@/stores/merchant'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{ user: User }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 
 const paysanStore = usePaysanStore()
+const transformerStore = useTransformerStore()
+const merchantStore = useMerchantStore()
+
 const isLoading = ref(true)
 const activeTab = ref('all')
 
+const isProcessor = computed(() => props.user.role === 'processor')
+const isMerchant = computed(() => props.user.role === 'merchant')
+const store = computed(() => {
+  if (isProcessor.value) return transformerStore
+  if (isMerchant.value) return merchantStore
+  return paysanStore
+})
+
 onMounted(async () => {
   try {
-    await paysanStore.fetchWallet()
+    await store.value.fetchWallet()
   } catch (error) {
     console.error('Error fetching wallet:', error)
     toast.error('Erreur lors du chargement du portefeuille')
@@ -26,7 +39,22 @@ onMounted(async () => {
 })
 
 const walletData = computed(() => {
-  const base = paysanStore.wallet || {}
+  const base = store.value.wallet || {}
+  
+  if (isProcessor.value || isMerchant.value) {
+    return {
+      soldeDisponible: Number(base.availableBalance ?? props.user.balance ?? 0),
+      soldeEscrow: Number(base.escrowBalance ?? 0),
+      statsMois: {
+        nombreVentes: base.monthlyStats?.salesCount || 0,
+        revenuTotalBrut: base.monthlyStats?.totalRevenue || 0,
+        totalCommissions: base.monthlyStats?.commissions || 0
+      },
+      evolutionRevenus: base.revenueHistory || [],
+      transactions: base.transactions || []
+    }
+  }
+
   return {
     soldeDisponible: Number(base.soldeDisponible ?? props.user.balance ?? 0),
     soldeEscrow: Number(base.soldeEscrow ?? props.user.pendingBalance ?? 0),

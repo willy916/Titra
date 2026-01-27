@@ -36,8 +36,18 @@ async function handleNext() {
       await authStore.completeTransporterProfile(formData.value)
       toast.success('Profil transporteur créé avec succès !')
       emit('complete', formData.value)
-    } catch (error) {
-      toast.error("Erreur lors de la création du profil")
+    } catch (error: any) {
+      console.error("Transporter profile creation error details:", error)
+      const data = error.response?.data
+      
+      if (data && typeof data === 'object' && !Array.isArray(data) && !data.message) {
+        Object.values(data).forEach((msg) => {
+          if (typeof msg === 'string') toast.error(msg)
+        })
+      } else {
+        const backendMessage = data?.message || data?.error || data?.body || (typeof data === 'string' ? data : null)
+        toast.error(backendMessage || "Erreur lors de la création du profil transporteur")
+      }
     }
   }
 }

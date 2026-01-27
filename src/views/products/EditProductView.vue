@@ -11,7 +11,7 @@ import { toast } from 'vue-sonner'
 import { useProductStore } from '@/stores/product'
 
 const props = defineProps<{ 
-  userRole: 'farmer' | 'processor',
+  userRole: 'farmer' | 'processor' | 'merchant',
   product: any
 }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()

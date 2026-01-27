@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ArrowLeft, MapPin, Phone, MessageSquare, Package, Truck, CheckCircle, Clock, XCircle, Loader2, Wallet } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
@@ -13,11 +13,13 @@ const emit = defineEmits<{ back: []; navigate: [screen: string, data?: any] }>()
 
 const orderStore = useOrderStore()
 const isLoading = ref(false)
+const isUpdating = ref(false)
 const orderDetails = ref<any>(null)
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  'EN_PREPARATION': { label: 'En préparation', color: 'bg-amber-500', icon: Package },
-  'EN_COURS': { label: 'En cours de livraison', color: 'bg-blue-500', icon: Truck },
+  'EN_ATTENTE': { label: 'En attente', color: 'bg-amber-400', icon: Clock },
+  'EN_PREPARATION': { label: 'Préparation', color: 'bg-amber-600', icon: Package },
+  'EN_COURS': { label: 'Expédiée', color: 'bg-blue-600', icon: Truck },
   'LIVREE': { label: 'Livrée', color: 'bg-green-600', icon: CheckCircle },
   'ANNULEE': { label: 'Annulée', color: 'bg-destructive', icon: XCircle },
 }
@@ -26,15 +28,30 @@ async function fetchDetails() {
   isLoading.value = true
   try {
     const data = await orderStore.fetchOrderDetails(props.order.id)
-    orderDetails.value = data
+    orderDetails.value = {
+      ...data,
+      buyerName: data.customerName || data.buyerName || 'Client'
+    }
   } catch (error) {
     console.error('Error fetching order details:', error)
     toast.error('Erreur lors du chargement des détails')
-    // Fallback to prop data if API fails but we have basic info
     orderDetails.value = props.order
   } finally {
     isLoading.value = false
   }
+}
+
+async function updateStatus(newStatus: string) {
+    isUpdating.value = true
+    try {
+        await orderStore.updateOrderStatus(orderDetails.value.id, newStatus)
+        toast.success(`Statut mis à jour : ${statusConfig[newStatus].label}`)
+        await fetchDetails()
+    } catch (error) {
+        toast.error('Erreur lors de la mise à jour du statut')
+    } finally {
+        isUpdating.value = false
+    }
 }
 
 onMounted(() => {
@@ -43,6 +60,27 @@ onMounted(() => {
   } else {
     orderDetails.value = props.order
   }
+})
+
+const nextStatus = computed(() => {
+    if (!orderDetails.value) return null
+    const status = orderDetails.value.orderStatus
+    
+    if (props.userRole === 'processor' || props.userRole === 'merchant') {
+        if (status === 'EN_ATTENTE') return { id: 'EN_PREPARATION', label: 'Préparer la commande' }
+        if (status === 'EN_PREPARATION') return { id: 'EN_COURS', label: 'Expédier la commande' }
+        if (status === 'EN_COURS') return { id: 'LIVREE', label: 'Confirmer la livraison' }
+    } else {
+        if (status === 'EN_PREPARATION') return { id: 'EN_COURS', label: 'Passer en livraison' }
+        if (status === 'EN_COURS') return { id: 'LIVREE', label: 'Confirmer la livraison' }
+    }
+    return null
+})
+
+const canCancel = computed(() => {
+    if (!orderDetails.value) return false
+    const status = orderDetails.value.orderStatus
+    return ['EN_ATTENTE', 'EN_PREPARATION'].includes(status)
 })
 
 const getStatus = (statusStr: string) => {
@@ -76,7 +114,7 @@ function getInitials(name: string) {
       <Card class="p-4">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <p class="font-semibold text-lg text-primary">{{ orderDetails.orderNumber }}</p>
+            <p class="font-semibold text-lg text-primary">{{ orderDetails.orderNumber || `CMD-${orderDetails.id.slice(0,8)}` }}</p>
             <p class="text-xs text-muted-foreground">
               {{ new Date(orderDetails.orderDate || Date.now()).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) }}
             </p>
@@ -90,7 +128,7 @@ function getInitials(name: string) {
         <!-- Progress -->
         <div class="pt-4 border-t border-dashed">
             <div class="flex items-center gap-3">
-                <div :class="`w-8 h-8 rounded-full flex items-center justify-center ${getStatus(orderDetails.orderStatus).color} text-white shadow-lg animate-pulse`">
+                <div :class="`w-8 h-8 rounded-full flex items-center justify-center ${getStatus(orderDetails.orderStatus).color} text-white shadow-lg`" :style="orderDetails.orderStatus !== 'DELIVERED' && orderDetails.orderStatus !== 'CANCELLED' ? 'animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;' : ''">
                     <component :is="getStatus(orderDetails.orderStatus).icon" class="w-4 h-4" />
                 </div>
                 <div>
@@ -188,10 +226,11 @@ function getInitials(name: string) {
       </Card>
 
       <!-- Actions -->
-      <div v-if="orderDetails.orderStatus === 'EN_PREPARATION' || orderDetails.orderStatus === 'EN_COURS'" class="flex gap-3 pt-4">
-        <Button variant="outline" class="flex-1 h-12">Annuler</Button>
-        <Button class="flex-1 bg-primary h-12 shadow-lg shadow-primary/20">
-          {{ orderDetails.orderStatus === 'EN_PREPARATION' ? 'Passer en livraison' : 'Confirmer la livraison' }}
+      <div v-if="nextStatus || canCancel" class="flex gap-3 pt-4">
+        <Button v-if="canCancel" variant="outline" class="flex-1 h-12" :disabled="isUpdating" @click="updateStatus(props.userRole === 'processor' ? 'CANCELLED' : 'ANNULEE')">Annuler</Button>
+        <Button v-if="nextStatus" class="flex-1 bg-primary h-12 shadow-lg shadow-primary/20" :disabled="isUpdating" @click="updateStatus(nextStatus.id)">
+          <Loader2 v-if="isUpdating" class="w-4 h-4 mr-2 animate-spin" />
+          {{ nextStatus.label }}
         </Button>
       </div>
     </div>

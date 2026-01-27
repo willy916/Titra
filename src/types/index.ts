@@ -223,3 +223,4 @@ export type Screen =
   | "training"
   | "order-detail"
   | "edit-product"
+  | "seller-profile"

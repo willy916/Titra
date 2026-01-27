@@ -76,8 +76,9 @@ export const useAuthStore = defineStore('auth', () => {
         localStorage.setItem('refreshToken', data.refreshToken)
       }
 
-      // Transform API user to app User type
-      const apiUser = data.user
+      // Map existing user data if available in the direct message or data object
+      const apiUser = data.user || response.data.message || data
+
       console.log('API User object:', apiUser)
 
       // Role mapping helper
@@ -86,18 +87,28 @@ export const useAuthStore = defineStore('auth', () => {
           'Paysan / Producteur': 'farmer',
           'PAYSAN': 'farmer',
           'Transformateur': 'processor',
+          'TRANSFORMATEUR': 'processor',
           'Commerçant': 'merchant',
+          'COMMERCANT': 'merchant',
           'Transporteur': 'transporter',
+          'TRANSPORTEUR': 'transporter',
           'Consommateur': 'consumer',
+          'CONSOMMATEUR': 'consumer',
           'Formation': 'independent',
+          'FORMATION': 'independent',
           'Coopérative': 'cooperative',
+          'COOPERATIVE': 'cooperative',
           'Association': 'association',
+          'ASSOCIATION': 'association',
           'Union': 'union',
+          'UNION': 'union',
           'Fédération': 'federation',
+          'FEDERATION': 'federation',
           'Interprofession': 'interprofession',
+          'INTERPROFESSION': 'interprofession',
           'Interprofessionnalité': 'interprofession'
         }
-        return mapping[roleName] || 'USER'
+        return mapping[roleName] || mapping[roleName.toUpperCase()] || 'USER'
       }
 
       const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : 'USER'
@@ -116,12 +127,21 @@ export const useAuthStore = defineStore('auth', () => {
         name: userName,
         role: roleSlug,
         verified: apiUser.verified,
-        onboardingCompleted: apiUser.completed || false
+        onboardingCompleted: apiUser.completed === true,
+        currentOnboardingStep: apiUser.completed ? undefined : 1
       } as User
+
+      // Override role if it's generic user but we are in a flow where we might know better?
+      // No, trust the backend. If backend says 'Commerçant' but completed=false, app will redirect to onboarding.
 
       // Store role-specific name for dashboard display
       if (roleSlug) {
         (mappedUser as any)[roleSlug] = userName
+      }
+
+      // If user has a role but is not completed, ensure we select that role locally to trigger correct routing
+      if (roleSlug !== 'USER' && !mappedUser.onboardingCompleted) {
+        selectedRole.value = roleSlug
       }
 
       console.log('Mapped User for storage:', mappedUser)
@@ -129,7 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
       setUser(mappedUser)
       localStorage.setItem('user', JSON.stringify(mappedUser))
 
-      return { ...responseData, isNewUser }
+      return { ...responseData, isNewUser, user: mappedUser }
     } catch (error) {
       console.error('Verify OTP error:', error)
       throw error
@@ -138,16 +158,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function completeOnboarding(data: Record<string, unknown>) {
-    const newUser: User = {
-      ...mockUser,
-      role: selectedRole.value!,
-      name: `${data.firstName} ${data.lastName}`,
-      location: data.location as string,
-      cooperative: data.cooperative as string | undefined,
-      interprofession: data.interprofession as string | undefined,
-    }
-    setUser(newUser)
+  function completeOnboarding() {
+    localStorage.removeItem('user')
+    window.location.reload()
   }
 
   function skipOnboarding(role: UserRole) {
@@ -166,7 +179,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refreshToken')
   }
 
-  function initializeAuth() {
+  async function initializeAuth() {
     const token = localStorage.getItem('accessToken')
     const savedUser = localStorage.getItem('user')
     if (token) {
@@ -179,10 +192,11 @@ export const useAuthStore = defineStore('auth', () => {
         }
       }
       // Always fetch fresh user data including profile photo
-      fetchCurrentUser().catch(() => {
-        // If fetch fails (e.g. token expired), we might want to logout or just stay with cached data
-        // For now, let's keep cached data to avoid jarring logout on network error
-      })
+      try {
+        await fetchCurrentUser()
+      } catch (error) {
+        console.error('Initial user fetch failed:', error)
+      }
     }
   }
 
@@ -225,15 +239,8 @@ export const useAuthStore = defineStore('auth', () => {
       console.log('Response:', response.data)
       // const apiUser = response.data.body
 
-      const updatedUser: User = {
-        ...user.value!,
-        name: `${payload.firstName} ${payload.lastName}`,
-        location: payload.address,
-        role: 'farmer',
-        onboardingCompleted: true
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
+      localStorage.removeItem('user')
+      window.location.reload()
       return response.data
     } catch (error) {
       console.error('Complete Profile error:', error)
@@ -279,18 +286,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.put('/api/cooperative/complete-profile', payload)
       const savedData = response.data.data || response.data.body || response.data
 
-      const updatedUser: User = {
-        ...user.value!,
-        name: savedData.name || payload.name,
-        cooperative: savedData.name || payload.name,
-        location: savedData.region || savedData.location || payload.location,
-        role: 'cooperative',
-        onboardingCompleted: true,
-        photo: savedData.logoPath || payload.logoPath || user.value?.photo
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
-
+      localStorage.removeItem('user')
+      window.location.reload()
       return response.data
     } catch (error) {
       console.error('Complete Cooperative Profile error:', error)
@@ -331,17 +328,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.put('/api/association/complete-profile', payload)
       const savedData = response.data.data || response.data.body || response.data
 
-      const updatedUser: User = {
-        ...user.value!,
-        name: savedData.name || payload.name,
-        association: savedData.name || payload.name,
-        location: savedData.location || payload.location,
-        role: 'association',
-        onboardingCompleted: true
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
-
+      localStorage.removeItem('user')
+      window.location.reload()
       return response.data
     } catch (error) {
       console.error('Complete Association Profile error:', error)
@@ -376,17 +364,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.put('/api/union/complete-profile', payload)
       const savedData = response.data.data || response.data.body || response.data
 
-      const updatedUser: User = {
-        ...user.value!,
-        name: savedData.name || payload.name,
-        union: savedData.name || payload.name,
-        location: savedData.siegeVille || payload.siegeVille,
-        role: 'union',
-        onboardingCompleted: true
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
-
+      localStorage.removeItem('user')
+      window.location.reload()
       return response.data
     } catch (error) {
       console.error('Complete Union Profile error:', error)
@@ -421,16 +400,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.put('/api/federation/complete-profile', payload)
       const savedData = response.data.data || response.data.body || response.data
 
-      const updatedUser: User = {
-        ...user.value!,
-        name: savedData.name || payload.name,
-        federation: savedData.name || payload.name,
-        location: savedData.siegeVille || payload.siegeVille,
-        role: 'federation',
-        onboardingCompleted: true
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
+      localStorage.removeItem('user')
+      window.location.reload()
       return response.data
     } catch (error) {
       console.error('Complete Federation Profile error:', error)
@@ -462,16 +433,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.put('/api/interprofession/complete-profile', payload)
       const savedData = response.data.data || response.data.body || response.data
 
-      const updatedUser: User = {
-        ...user.value!,
-        name: savedData.name || payload.name,
-        interprofession: savedData.name || payload.name,
-        location: savedData.siegeVille || payload.siegeVille,
-        role: 'interprofession',
-        onboardingCompleted: true
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
+      localStorage.removeItem('user')
+      window.location.reload()
       return response.data
     } catch (error) {
       console.error('Complete Interprofession Profile error:', error)
@@ -484,17 +447,15 @@ export const useAuthStore = defineStore('auth', () => {
   async function completeTransformerProfile(profileData: any) {
     isLoading.value = true
     try {
-      // Mocking API call for now if endpoint doesn't exist
-      const updatedUser: User = {
-        ...user.value!,
-        name: `${profileData.firstName} ${profileData.lastName}`,
-        location: profileData.location,
-        role: 'processor',
-        onboardingCompleted: true
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
-      return { success: true }
+      const response = await api.post('/api/transform/completed', profileData)
+      const data = response.data.body || response.data
+
+      localStorage.removeItem('user')
+      window.location.reload()
+      return data
+    } catch (error) {
+      console.error('Complete transformer profile error:', error)
+      throw error
     } finally {
       isLoading.value = false
     }
@@ -503,16 +464,30 @@ export const useAuthStore = defineStore('auth', () => {
   async function completeMerchantProfile(profileData: any) {
     isLoading.value = true
     try {
-      const updatedUser: User = {
-        ...user.value!,
-        name: `${profileData.firstName} ${profileData.lastName}`,
-        location: profileData.location,
-        role: 'merchant',
-        onboardingCompleted: true
+      const payload = {
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        shopName: profileData.shopName,
+        address: profileData.address,
+        deliveryZone: profileData.deliveryZone,
+        buyType: profileData.buyType, // DETAIL, GROS, BOTH
+        typeCommerce: profileData.typeCommerce,
+        productSearched: profileData.productSearched || []
       }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
-      return { success: true }
+
+      console.log('--- completing merchant profile ---')
+      console.log('Payload:', payload)
+
+      const response = await api.post('/api/commercant/complete-profile', payload)
+      // Assuming response body can be directly the user data or enveloped
+      const data = response.data.body || response.data
+
+      localStorage.removeItem('user')
+      window.location.reload()
+      return { success: true, data }
+    } catch (error) {
+      console.error('Complete Merchant Profile error:', error)
+      throw error
     } finally {
       isLoading.value = false
     }
@@ -521,15 +496,8 @@ export const useAuthStore = defineStore('auth', () => {
   async function completeTransporterProfile(profileData: any) {
     isLoading.value = true
     try {
-      const updatedUser: User = {
-        ...user.value!,
-        name: `${profileData.firstName} ${profileData.lastName}`,
-        location: profileData.location,
-        role: 'transporter',
-        onboardingCompleted: true
-      }
-      setUser(updatedUser)
-      localStorage.setItem('user', JSON.stringify(updatedUser))
+      localStorage.removeItem('user')
+      window.location.reload()
       return { success: true }
     } finally {
       isLoading.value = false
@@ -545,7 +513,11 @@ export const useAuthStore = defineStore('auth', () => {
       // Use specific endpoint for structures, fallback to user upload for others
       let endpoint = '/api/user/upload'
       const role = user.value?.role
-      if (role && ['cooperative', 'association', 'union', 'federation', 'interprofession'].includes(role)) {
+      if (role === 'processor') {
+        endpoint = '/api/transform/upload-avatar'
+      } else if (role === 'merchant') {
+        endpoint = '/api/commercant/upload-avatar'
+      } else if (role && ['cooperative', 'association', 'union', 'federation', 'interprofession'].includes(role)) {
         endpoint = `/api/${role}/upload-avatar`
       }
 
@@ -671,17 +643,27 @@ export const useAuthStore = defineStore('auth', () => {
       const mapApiRoleToSlug = (roleName: string): UserRole => {
         const mapping: Record<string, UserRole> = {
           'Paysan / Producteur': 'farmer',
-          'PAYSAN': 'farmer', // Handle uppercase from backend
+          'PAYSAN': 'farmer',
           'Transformateur': 'processor',
+          'TRANSFORMATEUR': 'processor',
           'Commerçant': 'merchant',
+          'COMMERCANT': 'merchant',
           'Transporteur': 'transporter',
+          'TRANSPORTEUR': 'transporter',
           'Consommateur': 'consumer',
+          'CONSOMMATEUR': 'consumer',
           'Formation': 'independent',
+          'FORMATION': 'independent',
           'Coopérative': 'cooperative',
+          'COOPERATIVE': 'cooperative',
           'Association': 'association',
+          'ASSOCIATION': 'association',
           'Union': 'union',
+          'UNION': 'union',
           'Fédération': 'federation',
+          'FEDERATION': 'federation',
           'Interprofession': 'interprofession',
+          'INTERPROFESSION': 'interprofession',
           'Interprofessionnalité': 'interprofession'
         }
         return mapping[roleName] || 'farmer'
@@ -709,7 +691,7 @@ export const useAuthStore = defineStore('auth', () => {
         verified: apiUser.verified,
         onboardingCompleted: apiUser.completed || (!!profile), // Assume completed if profile exists
         photo: message.avatarUrl || (profile && profile.avatarUrl) || (profile && profile.avatarPath) || (user.value?.photo || undefined),
-        matricule: (profile && profile.codePaysan) ? profile.codePaysan : undefined // Map matricule if available
+        matricule: (profile && (profile.matricule || profile.codePaysan)) ? (profile.matricule || profile.codePaysan) : undefined
       } as User
 
       // specific mapping for location if available in profile

@@ -4,14 +4,22 @@ import { Search, ShoppingCart, Package, TrendingUp, Bell, Settings, Truck, Store
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
+import { useMerchantStore } from '@/stores/merchant'
 
 const props = defineProps<{ user: { name: string; balance?: number } }>()
 const emit = defineEmits<{ navigate: [screen: string, data?: any] }>()
 
+const merchantStore = useMerchantStore()
 const isLoading = ref(true)
-onMounted(() => { setTimeout(() => isLoading.value = false, 1200) })
 
-const stats = { pendingOrders: 5, completedOrders: 43, totalSpent: 3850000, thisMonth: 1250000 }
+onMounted(async () => { 
+  try {
+    await merchantStore.fetchDashboardStats()
+  } finally {
+    isLoading.value = false 
+  }
+})
+
 const activeOrders = [
   { id: '1', product: 'Igname', seller: 'Koné Ibrahim', quantity: '200kg', status: 'En préparation', delivery: 'Demain' },
   { id: '2', product: 'Tomate', seller: 'Coopérative Divo', quantity: '50kg', status: 'En livraison', delivery: "Aujourd'hui" },
@@ -25,26 +33,29 @@ const activeOrders = [
       <div class="flex items-center justify-between mb-6">
         <div>
           <p class="text-white/80 text-sm">Bonjour,</p>
-          <h1 class="text-white text-2xl">{{ user.name }}</h1>
-          <Badge variant="secondary" class="mt-2 bg-white/20 text-white border-0">Commerçant</Badge>
+          <h1 class="text-white text-2xl">{{ merchantStore.stats?.fullName || user.name }}</h1>
+          <Badge v-if="merchantStore.stats?.shopName" variant="secondary" class="mt-2 bg-white/20 text-white border-0">{{ merchantStore.stats.shopName }}</Badge>
+          <Badge v-else variant="secondary" class="mt-2 bg-white/20 text-white border-0">Commerçant</Badge>
         </div>
         <div class="flex gap-2">
           <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center relative">
             <Bell class="w-5 h-5" />
             <span class="absolute -top-1 -right-1 w-5 h-5 bg-secondary text-white text-xs rounded-full flex items-center justify-center">3</span>
           </button>
-          <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><Settings class="w-5 h-5" /></button>
+          <button @click="emit('navigate', 'settings')" class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><Settings class="w-5 h-5" /></button>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <Card class="bg-white/10 border-white/20 backdrop-blur p-4">
           <div class="flex items-center gap-2 mb-2"><Package class="w-4 h-4 text-white/80" /><p class="text-white/80 text-xs">Commandes en cours</p></div>
-          <p class="text-white text-2xl">{{ stats.pendingOrders }}</p>
+          <p v-if="merchantStore.isLoading" class="h-8 w-12 bg-white/20 animate-pulse rounded"></p>
+          <p v-else class="text-white text-2xl">{{ merchantStore.stats?.pendingOrdersCount || 0 }}</p>
         </Card>
         <Card class="bg-white/10 border-white/20 backdrop-blur p-4">
           <div class="flex items-center gap-2 mb-2"><TrendingUp class="w-4 h-4 text-white/80" /><p class="text-white/80 text-xs">Ce mois</p></div>
-          <p class="text-white text-lg">{{ (stats.thisMonth / 1000).toFixed(0) }}k F</p>
+          <p v-if="merchantStore.isLoading" class="h-8 w-24 bg-white/20 animate-pulse rounded"></p>
+          <p v-else class="text-white text-lg">{{ ((merchantStore.stats?.monthlySpending || 0) / 1000).toFixed(0) }}k F</p>
         </Card>
       </div>
     </div>
@@ -54,21 +65,21 @@ const activeOrders = [
       <div>
         <h2 class="mb-4 text-primary">Actions rapides</h2>
         <div class="grid grid-cols-2 gap-3">
-          <Button @click="emit('navigate', 'marketplace')" class="h-auto flex-col gap-2 py-4 bg-primary"><Search class="w-6 h-6" /><span class="text-sm">Rechercher produits</span></Button>
-          <Button @click="emit('navigate', 'orders')" class="h-auto flex-col gap-2 py-4 bg-secondary"><ShoppingCart class="w-6 h-6" /><span class="text-sm">Mes commandes</span></Button>
-          <Button @click="emit('navigate', 'accounting')" variant="outline" class="h-auto flex-col gap-2 py-4"><Calculator class="w-6 h-6" /><span class="text-sm">Ma Comptabilité</span></Button>
-          <Button @click="emit('navigate', 'wallet')" variant="outline" class="h-auto flex-col gap-2 py-4"><TrendingUp class="w-6 h-6" /><span class="text-sm">Portefeuille</span></Button>
+          <Button @click="emit('navigate', 'marketplace')" class="h-auto flex-col gap-2 py-4 bg-primary"><Search class="w-6 h-6" /><span class="text-sm">Marketplace</span></Button>
+          <Button @click="emit('navigate', 'my-products')" class="h-auto flex-col gap-2 py-4 bg-secondary"><Store class="w-6 h-6" /><span class="text-sm">Ma Boutique</span></Button>
+          <Button @click="emit('navigate', 'orders')" variant="outline" class="h-auto flex-col gap-2 py-4"><ShoppingCart class="w-6 h-6 text-primary" /><span class="text-sm">Commandes</span></Button>
+          <Button @click="emit('navigate', 'accounting')" variant="outline" class="h-auto flex-col gap-2 py-4"><Calculator class="w-6 h-6 text-primary" /><span class="text-sm">Comptabilité</span></Button>
         </div>
       </div>
 
       <!-- Active Orders -->
       <div>
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-primary">Commandes en cours</h3>
+          <h3 class="text-primary">Dernières achats</h3>
           <Button variant="ghost" size="sm" @click="emit('navigate', 'orders')">Voir tout</Button>
         </div>
         <div class="space-y-3">
-          <template v-if="isLoading">
+          <template v-if="merchantStore.isLoading">
             <Card v-for="i in 2" :key="i" class="p-4 animate-pulse">
               <div class="flex items-start justify-between mb-3">
                 <div>
@@ -77,10 +88,6 @@ const activeOrders = [
                   <div class="h-4 w-16 bg-muted rounded"></div>
                 </div>
                 <div class="h-6 w-24 bg-muted rounded"></div>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="w-4 h-4 bg-muted rounded"></div>
-                <div class="h-4 w-32 bg-muted rounded"></div>
               </div>
             </Card>
           </template>
@@ -106,16 +113,16 @@ const activeOrders = [
       <Card class="p-4">
         <h3 class="text-primary mb-4">Statistiques du mois</h3>
         <div class="space-y-3">
-          <template v-if="isLoading">
+          <template v-if="merchantStore.isLoading">
             <div v-for="i in 3" :key="i" class="flex items-center justify-between animate-pulse">
               <div class="h-4 w-32 bg-muted rounded"></div>
               <div class="h-4 w-20 bg-muted rounded"></div>
             </div>
           </template>
           <template v-else>
-            <div class="flex items-center justify-between"><span class="text-muted-foreground">Commandes terminées</span><span class="font-medium text-primary">{{ stats.completedOrders }}</span></div>
-            <div class="flex items-center justify-between"><span class="text-muted-foreground">Dépenses totales</span><span class="font-medium">{{ stats.totalSpent.toLocaleString() }} F</span></div>
-            <div class="flex items-center justify-between"><span class="text-muted-foreground">Moyenne par commande</span><span class="font-medium">{{ Math.round(stats.totalSpent / stats.completedOrders).toLocaleString() }} F</span></div>
+            <div class="flex items-center justify-between"><span class="text-muted-foreground">Commandes terminées</span><span class="font-medium text-primary">{{ merchantStore.stats?.completedOrdersCount || 0 }}</span></div>
+            <div class="flex items-center justify-between"><span class="text-muted-foreground">Dépenses totales</span><span class="font-medium">{{ (merchantStore.stats?.monthlySpending || 0).toLocaleString() }} F</span></div>
+            <div class="flex items-center justify-between"><span class="text-muted-foreground">Moyenne par commande</span><span class="font-medium">{{ (merchantStore.stats?.averageOrderAmount || 0).toLocaleString() }} F</span></div>
           </template>
         </div>
       </Card>

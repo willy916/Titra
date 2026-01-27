@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Toaster, toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import { useChatStore } from '@/stores/chat'
 import type { UserRole, Screen } from '@/types'
 
 // Auth Views
@@ -31,6 +32,7 @@ import InstitutionHome from '@/views/home/InstitutionHome.vue'
 
 // Screen Views
 import MessagesView from '@/views/messages/MessagesView.vue'
+import ChatView from '@/views/messages/ChatView.vue'
 import MyProductsView from '@/views/products/MyProductsView.vue'
 import AddProductView from '@/views/products/AddProductView.vue'
 import EditProductView from '@/views/products/EditProductView.vue'
@@ -42,6 +44,7 @@ import WalletView from '@/views/wallet/WalletView.vue'
 import AccountingView from '@/views/accounting/AccountingView.vue'
 import TrainingView from '@/views/training/TrainingView.vue'
 import ProfileView from '@/views/profile/ProfileView.vue'
+import SellerProfileView from '@/views/profile/SellerProfileView.vue'
 import SettingsView from '@/views/settings/SettingsView.vue'
 import StatsView from '@/views/stats/StatsView.vue'
 import MembersView from '@/views/members/MembersView.vue'
@@ -58,7 +61,9 @@ import MobileSidebar from '@/components/navigation/MobileSidebar.vue'
 
 const authStore = useAuthStore()
 const cartStore = useCartStore()
+const chatStore = useChatStore()
 
+const isInitializing = ref(true)
 const currentScreen = ref<Screen>('signup')
 const isMobileSidebarOpen = ref(false)
 const selectedRole = ref<UserRole | null>(null)
@@ -68,10 +73,20 @@ const screenData = ref<any>(null)
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const user = computed(() => authStore.user)
 
-onMounted(() => {
-  authStore.initializeAuth()
+onMounted(async () => {
+  await authStore.initializeAuth()
+  isInitializing.value = false
+  
   if (authStore.isAuthenticated) {
     const user = authStore.user
+    
+    // Consumer special case: they never have onboarding
+    if (user?.role === 'consumer') {
+      authStore.skipOnboarding('consumer')
+      currentScreen.value = 'home'
+      return
+    }
+
     if (user?.onboardingCompleted) {
       currentScreen.value = 'home'
     } else if (user?.role && user.role !== 'USER') {
@@ -84,6 +99,15 @@ onMounted(() => {
   }
 })
 
+// Global WebSocket management
+watch(isAuthenticated, (authenticated) => {
+  if (authenticated) {
+    chatStore.connectWebSocket()
+  } else {
+    chatStore.disconnectWebSocket()
+  }
+}, { immediate: true })
+
 // Screen title mapping
 const screenTitles: Record<string, string> = {
   home: 'Accueil',
@@ -93,6 +117,7 @@ const screenTitles: Record<string, string> = {
   messages: 'Messages',
   wallet: 'Portefeuille',
   profile: 'Mon profil',
+  'seller-profile': 'Profil Vendeur',
   settings: 'Paramètres',
   'my-products': 'Mes produits',
   missions: 'Missions',
@@ -112,14 +137,41 @@ const showFullLayout = computed(() => {
 function handleVerifyOTP() {
   const user = authStore.user
   
-  // If user is not fully registered (completed: false) or has generic 'USER' role,
-  // we always redirect to role selection to ensure they pick or confirm their profile.
-  if (!user || user.role === 'USER' || !user.onboardingCompleted) {
+  if (!user) {
     currentScreen.value = 'role-selection'
-  } else {
+    return
+  }
+
+  // If onboarding is completed, always go home
+  if (user.onboardingCompleted) {
     currentScreen.value = 'home'
     toast.success('Bon retour sur TITRA !')
+    setTimeout(() => {
+      window.location.reload()
+    }, 500)
+    return
   }
+
+  // Consumer special case: directly to home as they have no onboarding
+  if (user.role === 'consumer') {
+    authStore.skipOnboarding('consumer')
+    currentScreen.value = 'home'
+    toast.success('Bienvenue sur TITRA !')
+    setTimeout(() => {
+      window.location.reload()
+    }, 500)
+    return
+  }
+
+  // If user has a specific role but is not fully registered (completed: false)
+  if (user.role && user.role !== 'USER' && !user.onboardingCompleted) {
+    selectedRole.value = user.role
+    currentScreen.value = `${user.role}-onboarding` as Screen
+    return
+  }
+  
+  // Default: role selection
+  currentScreen.value = 'role-selection'
 }
 
 function handleSelectRole(role: UserRole) {
@@ -138,10 +190,8 @@ function handleSelectRole(role: UserRole) {
   currentScreen.value = `${role}-onboarding` as Screen
 }
 
-function handleCompleteOnboarding(data: any) {
-  authStore.completeOnboarding(data)
-  currentScreen.value = 'home'
-  toast.success('Bienvenue sur TITRA !')
+function handleCompleteOnboarding() {
+  authStore.completeOnboarding()
 }
 
 function handleNavigate(screen: string, data?: any) {
@@ -150,9 +200,9 @@ function handleNavigate(screen: string, data?: any) {
   isMobileSidebarOpen.value = false
 }
 
-function handleAddToCart(product: any) {
-  cartStore.addToCart(product)
-  toast.success('Produit ajouté au panier')
+function handleAddToCart(product: any, quantity: number = 1) {
+  cartStore.addToCart(product, quantity)
+  toast.success(`${quantity} produit(s) ajouté(s) au panier`)
 }
 
 function handleLogout() {
@@ -212,6 +262,12 @@ const OnboardingComponent = computed(() => {
 
 <template>
   <div class="min-h-screen bg-background">
+    <!-- Initial Loader -->
+    <div v-if="isInitializing" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center">
+      <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p class="text-muted-foreground animate-pulse">Initialisation de TITRA...</p>
+    </div>
+
     <!-- Unauthenticated: Signup -->
     <SignupView
       v-if="currentScreen === 'signup'"
@@ -290,10 +346,17 @@ const OnboardingComponent = computed(() => {
             @navigate="handleNavigate"
           />
 
+          <!-- Chat -->
+          <ChatView
+            v-else-if="currentScreen === 'chat' && (screenData?.conversation || screenData?.otherUser)"
+            :conversation="screenData.conversation || { otherUser: screenData.otherUser }"
+            @back="handleNavigate('messages')"
+          />
+
           <!-- My Products -->
           <MyProductsView
             v-else-if="currentScreen === 'my-products' && user"
-            :user-role="user.role === 'processor' ? 'processor' : 'farmer'"
+            :user-role="user.role === 'processor' ? 'processor' : (user.role === 'merchant' ? 'merchant' : 'farmer')"
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
           />
@@ -301,7 +364,7 @@ const OnboardingComponent = computed(() => {
           <!-- Add Product -->
           <AddProductView
             v-else-if="currentScreen === 'add-product' && user"
-            :user-role="user.role === 'processor' ? 'processor' : (user.role === 'cooperative' || user.role === 'association' || user.role === 'union' || user.role === 'federation' || user.role === 'interprofession' ? 'cooperative' : 'farmer')"
+            :user-role="user.role === 'processor' ? 'processor' : (user.role === 'merchant' ? 'merchant' : (user.role === 'cooperative' || user.role === 'association' || user.role === 'union' || user.role === 'federation' || user.role === 'interprofession' ? 'cooperative' : 'farmer'))"
             @back="handleNavigate('my-products')"
             @navigate="handleNavigate"
           />
@@ -310,7 +373,7 @@ const OnboardingComponent = computed(() => {
           <EditProductView
             v-else-if="currentScreen === 'edit-product' && user && screenData?.product"
             :product="screenData.product"
-            :user-role="user.role === 'processor' ? 'processor' : 'farmer'"
+            :user-role="user.role === 'processor' ? 'processor' : (user.role === 'merchant' ? 'merchant' : 'farmer')"
             @back="handleNavigate('my-products')"
             @navigate="handleNavigate"
           />
@@ -318,6 +381,7 @@ const OnboardingComponent = computed(() => {
           <!-- Marketplace -->
           <MarketplaceView
             v-else-if="currentScreen === 'marketplace'"
+            :initial-data="screenData"
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
           />
@@ -423,6 +487,15 @@ const OnboardingComponent = computed(() => {
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
             @logout="handleLogout"
+          />
+
+          <!-- Seller Profile -->
+          <SellerProfileView
+            v-else-if="currentScreen === 'seller-profile' && screenData?.sellerId"
+            :seller-id="screenData.sellerId"
+            :seller-data="screenData.seller"
+            @back="handleNavigate('home')"
+            @navigate="handleNavigate"
           />
 
           <!-- Settings -->

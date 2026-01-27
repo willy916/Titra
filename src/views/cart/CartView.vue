@@ -4,33 +4,82 @@ import { ArrowLeft, Minus, Plus, Trash2, ShoppingCart } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import { useCartStore } from '@/stores/cart'
+import { useConsumerStore } from '@/stores/consumer'
 import { toast } from 'vue-sonner'
 
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 
 const cartStore = useCartStore()
+const consumerStore = useConsumerStore()
 const isLoading = ref(true)
+const isCheckingOut = ref(false)
 
-onMounted(() => { setTimeout(() => isLoading.value = false, 800) })
+onMounted(async () => {
+  try {
+    await cartStore.fetchCart()
+  } catch (error) {
+    console.error('Error loading cart:', error)
+  } finally {
+    isLoading.value = false
+  }
+})
 
-const subtotal = computed(() => cartStore.items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0))
-const deliveryFee = 1000
-const commission = computed(() => subtotal.value * 0.05)
-const total = computed(() => subtotal.value + deliveryFee + commission.value)
+const subtotal = computed(() => cartStore.subtotal)
+const deliveryFee = computed(() => cartStore.deliveryFee)
+const commission = computed(() => cartStore.titraCommission)
+const total = computed(() => cartStore.total)
 
 const updateQuantity = (productId: string, quantity: number) => {
   cartStore.updateQuantity(productId, quantity)
 }
 
-const removeItem = (productId: string) => {
-  cartStore.removeItem(productId)
-  toast.success('Produit retiré du panier')
+const removeItem = async (productId: string) => {
+  try {
+    await cartStore.removeFromCart(productId)
+    toast.success('Produit retiré du panier')
+  } catch (error) {
+    toast.error('Erreur lors de la suppression')
+  }
 }
 
-const handleCheckout = () => {
-  toast.success('Commande passée avec succès !', { description: 'Vous serez notifié quand le vendeur confirmera' })
-  cartStore.clearCart()
-  emit('navigate', 'orders')
+const handleCheckout = async () => {
+  if (cartStore.items.length === 0) {
+    toast.error('Votre panier est vide')
+    return
+  }
+
+  isCheckingOut.value = true
+  try {
+    // 1. Créer les commandes
+    const orders = await cartStore.checkout()
+    
+    if (!orders || orders.length === 0) {
+      toast.error('Erreur lors de la création de la commande')
+      return
+    }
+
+    // 2. Initier le paiement pour la première commande
+    const firstOrder = Array.isArray(orders) ? orders[0] : orders
+    const orderId = firstOrder.id
+
+    const paymentData = await consumerStore.initiatePayment(orderId)
+    
+    if (paymentData.success && paymentData.paymentUrl) {
+      toast.success('Redirection vers le paiement...')
+      // Redirection vers PayTech
+      window.location.href = paymentData.paymentUrl
+    } else {
+      toast.success('Commande créée !', { 
+        description: 'Vous pouvez finaliser le paiement depuis vos commandes' 
+      })
+      emit('navigate', 'orders')
+    }
+  } catch (error) {
+    console.error('Checkout error:', error)
+    toast.error('Erreur lors de la commande')
+  } finally {
+    isCheckingOut.value = false
+  }
 }
 </script>
 
@@ -176,8 +225,9 @@ const handleCheckout = () => {
             </span>
           </div>
         </div>
-        <Button @click="handleCheckout" class="w-full bg-primary h-12" :disabled="isLoading">
-          Passer la commande
+        <Button @click="handleCheckout" class="w-full bg-primary h-12" :disabled="isCheckingOut || cartStore.isLoading">
+          <span v-if="isCheckingOut">Traitement en cours...</span>
+          <span v-else>Passer la commande</span>
         </Button>
       </div>
     </template>
