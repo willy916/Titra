@@ -1,7 +1,7 @@
 import axios, { type InternalAxiosRequestConfig, type AxiosResponse, type AxiosError } from 'axios'
 
-const API_URL = 'http://127.0.0.1:8083' // Localhost
-// const API_URL = 'http://192.168.1.3:8083' // Previous Localhost
+// const API_URL = 'http://127.0.0.1:8083' // Localhost
+const API_URL = 'http://192.168.1.3:8083' // Previous Localhost
 // const API_URL = 'http://213.199.54.136:8083' // Remote
 
 const api = axios.create({
