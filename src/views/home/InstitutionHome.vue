@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Bell, Plus, TrendingUp, Wallet, Package, Users, Settings, Store, Calculator, GraduationCap, BarChart3, UserPlus, Loader2 } from 'lucide-vue-next'
+import { Bell, Plus, TrendingUp, Wallet, Package, Users, Settings, Store, Calculator, GraduationCap, BarChart3, UserPlus, Loader2, ShoppingCart } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import type { User } from '@/types'
 import { usePaysanStore } from '@/stores/paysan'
+import { useCartStore } from '@/stores/cart'
 
 const props = defineProps<{ user: User }>()
 const emit = defineEmits<{ navigate: [screen: string] }>()
 
 const paysanStore = usePaysanStore()
+const cartStore = useCartStore()
 const isLoading = ref(true)
 
 onMounted(async () => { 
@@ -87,6 +89,8 @@ const topSellers = computed(() => {
   }))
 })
 
+const cartItemsCount = computed(() => cartStore.items.length)
+
 const recentActivities = computed(() => {
   const activities = paysanStore.activities || []
   return activities.map((act: any, index: number) => ({
@@ -123,6 +127,12 @@ function getActivityClass(type: string) {
             <h3 class="text-white">{{ displayName }}</h3>
           </div>
           <div class="flex gap-2">
+            <button @click="emit('navigate', 'cart')" class="relative w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <ShoppingCart class="w-5 h-5 text-white" />
+              <span v-if="cartItemsCount > 0" class="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-primary">
+                {{ cartItemsCount }}
+              </span>
+            </button>
             <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
               <Bell class="w-5 h-5 text-white" />
             </button>

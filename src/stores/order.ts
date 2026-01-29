@@ -5,6 +5,7 @@ import api from '@/services/api'
 export const useOrderStore = defineStore('order', () => {
     const isLoading = ref(false)
     const orders = ref<any[]>([])
+    const personalOrders = ref<any[]>([])
 
     function getBaseUrl() {
         const userJson = localStorage.getItem('user')
@@ -28,6 +29,28 @@ export const useOrderStore = defineStore('order', () => {
         return '/api/paysan/orders'
     }
 
+    function getPersonalOrdersBaseUrl() {
+        const userJson = localStorage.getItem('user')
+        if (userJson) {
+            const user = JSON.parse(userJson)
+            const role = user.role
+            // Personal orders endpoint for tracking purchases
+            if (['cooperative', 'association', 'union', 'federation', 'interprofession'].includes(role)) {
+                return `/api/${role}/my-purchases`
+            }
+            if (role === 'processor') {
+                return '/api/transform/my-purchases'
+            }
+            if (role === 'merchant') {
+                return '/api/commercant/my-purchases'
+            }
+            if (role === 'farmer') {
+                return '/api/paysan/my-purchases'
+            }
+        }
+        return '/api/consommateur/orders'
+    }
+
     async function fetchMyOrders(status?: string) {
         isLoading.value = true
         try {
@@ -42,6 +65,27 @@ export const useOrderStore = defineStore('order', () => {
             return orders.value
         } catch (error) {
             console.error('Fetch orders error:', error)
+            throw error
+        } finally {
+            isLoading.value = false
+        }
+    }
+
+    async function fetchMyPersonalOrders(statuses: string[]) {
+        isLoading.value = true
+        try {
+            const baseUrl = getPersonalOrdersBaseUrl()
+            const statusParam = statuses.join(',')
+            const url = `${baseUrl}?status=${statusParam}`
+            const response = await api.get(url)
+
+            // Normalize response
+            const data = response.data.body || response.data.data || response.data
+            personalOrders.value = Array.isArray(data) ? data : []
+
+            return personalOrders.value
+        } catch (error) {
+            console.error('Fetch personal orders error:', error)
             throw error
         } finally {
             isLoading.value = false
@@ -83,7 +127,9 @@ export const useOrderStore = defineStore('order', () => {
     return {
         isLoading,
         orders,
+        personalOrders,
         fetchMyOrders,
+        fetchMyPersonalOrders,
         fetchOrderDetails,
         fetchCooperativeOrders,
         fetchCooperativeOrderDetails,

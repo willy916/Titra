@@ -41,6 +41,9 @@ import MarketplaceView from '@/views/marketplace/MarketplaceView.vue'
 import ProductDetailView from '@/views/marketplace/ProductDetailView.vue'
 import OrdersView from '@/views/orders/OrdersView.vue'
 import OrderDetailView from '@/views/orders/OrderDetailView.vue'
+import OrderTypeSelectionView from '@/views/orders/OrderTypeSelectionView.vue'
+import CustomerOrdersView from '@/views/orders/CustomerOrdersView.vue'
+import MyPersonalOrdersView from '@/views/orders/MyPersonalOrdersView.vue'
 import WalletView from '@/views/wallet/WalletView.vue'
 import AccountingView from '@/views/accounting/AccountingView.vue'
 import TrainingView from '@/views/training/TrainingView.vue'
@@ -398,9 +401,31 @@ const OnboardingComponent = computed(() => {
             @add-to-cart="handleAddToCart"
           />
 
-          <!-- Orders -->
+          <!-- Orders Type Selection -->
+          <OrderTypeSelectionView
+            v-else-if="currentScreen === 'orders' && user && ['farmer', 'processor', 'merchant', 'cooperative', 'association', 'union', 'federation', 'interprofession'].includes(user.role)"
+            @back="handleNavigate('home')"
+            @navigate="handleNavigate"
+          />
+
+          <!-- Customer Orders (for sellers) -->
+          <CustomerOrdersView
+            v-else-if="currentScreen === 'customer-orders' && user"
+            :user-role="(user.role || 'farmer') as UserRole"
+            @back="handleNavigate('orders')"
+            @navigate="handleNavigate"
+          />
+
+          <!-- My Personal Orders (for buyers) -->
+          <MyPersonalOrdersView
+            v-else-if="currentScreen === 'my-personal-orders' && user"
+            @back="handleNavigate('orders')"
+            @navigate="handleNavigate"
+          />
+
+          <!-- Orders (for consumers - direct access) -->
           <OrdersView
-            v-else-if="currentScreen === 'orders' && user"
+            v-else-if="currentScreen === 'orders' && user && user.role === 'consumer'"
             :user-role="(user.role || 'farmer') as UserRole"
             @back="handleNavigate('home')"
             @navigate="handleNavigate"
@@ -411,7 +436,15 @@ const OnboardingComponent = computed(() => {
             v-else-if="currentScreen === 'order-detail' && screenData?.order && user"
             :order="screenData.order"
             :user-role="(user.role || 'farmer') as UserRole"
-            @back="handleNavigate('orders')"
+            @back="() => {
+              if (screenData?.fromScreen === 'customer-orders') {
+                handleNavigate('customer-orders')
+              } else if (screenData?.fromScreen === 'my-personal-orders') {
+                handleNavigate('my-personal-orders')
+              } else {
+                handleNavigate('orders')
+              }
+            }"
             @navigate="handleNavigate"
           />
 

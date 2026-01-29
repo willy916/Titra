@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Search, ShoppingCart, Package, TrendingUp, Bell, Settings, Truck, Store, Calculator } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import { useMerchantStore } from '@/stores/merchant'
+import { useCartStore } from '@/stores/cart'
 
 const props = defineProps<{ user: { name: string; balance?: number } }>()
 const emit = defineEmits<{ navigate: [screen: string, data?: any] }>()
 
 const merchantStore = useMerchantStore()
+const cartStore = useCartStore()
 const isLoading = ref(true)
 
 onMounted(async () => { 
@@ -24,6 +26,8 @@ const activeOrders = [
   { id: '1', product: 'Igname', seller: 'Koné Ibrahim', quantity: '200kg', status: 'En préparation', delivery: 'Demain' },
   { id: '2', product: 'Tomate', seller: 'Coopérative Divo', quantity: '50kg', status: 'En livraison', delivery: "Aujourd'hui" },
 ]
+
+const cartItemsCount = computed(() => cartStore.items.length)
 </script>
 
 <template>
@@ -38,6 +42,12 @@ const activeOrders = [
           <Badge v-else variant="secondary" class="mt-2 bg-white/20 text-white border-0">Commerçant</Badge>
         </div>
         <div class="flex gap-2">
+          <button @click="emit('navigate', 'cart')" class="relative w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            <ShoppingCart class="w-5 h-5" />
+            <span v-if="cartItemsCount > 0" class="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-primary">
+              {{ cartItemsCount }}
+            </span>
+          </button>
           <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center relative">
             <Bell class="w-5 h-5" />
             <span class="absolute -top-1 -right-1 w-5 h-5 bg-secondary text-white text-xs rounded-full flex items-center justify-center">3</span>

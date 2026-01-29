@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { ShoppingBag, Package, TrendingUp, Wallet, Bell, Settings, ArrowUpRight, ArrowDownRight } from 'lucide-vue-next'
+import { onMounted, computed, ref } from 'vue'
+import { ShoppingBag, Package, TrendingUp, Wallet, Bell, Settings, ArrowUpRight, ArrowDownRight, ShoppingCart } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import { useTransformerStore } from '@/stores/transformer'
+import { useCartStore } from '@/stores/cart'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{ user: { name: string; balance?: number; pendingBalance?: number } }>()
 const emit = defineEmits<{ navigate: [screen: string, data?: any] }>()
 
 const transformerStore = useTransformerStore()
+const cartStore = useCartStore()
 
 onMounted(async () => {
   try {
@@ -19,6 +21,8 @@ onMounted(async () => {
     toast.error('Erreur lors du chargement des statistiques')
   }
 })
+
+const cartItemsCount = computed(() => cartStore.items.length)
 </script>
 
 <template>
@@ -32,6 +36,12 @@ onMounted(async () => {
           <Badge variant="secondary" class="mt-2 bg-white/20 text-white border-0">Transformateur</Badge>
         </div>
         <div class="flex gap-2">
+          <button @click="emit('navigate', 'cart')" class="relative w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            <ShoppingCart class="w-5 h-5" />
+            <span v-if="cartItemsCount > 0" class="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-primary">
+              {{ cartItemsCount }}
+            </span>
+          </button>
           <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><Bell class="w-5 h-5" /></button>
           <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><Settings class="w-5 h-5" /></button>
         </div>

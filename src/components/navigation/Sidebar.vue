@@ -40,11 +40,11 @@ const navItems = computed((): NavItem[] => {
 
 const commerceItems = computed((): NavItem[] => {
   if (props.role === 'consumer') return [{ id: 'marketplace', label: 'Explorer', icon: Search }, { id: 'cart', label: 'Panier', icon: ShoppingCart }, { id: 'orders', label: 'Commandes', icon: Package }]
-  if (props.role === 'farmer') return [{ id: 'my-products', label: 'Mes produits', icon: Package }, { id: 'marketplace', label: 'Marketplace', icon: Search }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
-  if (props.role === 'processor') return [{ id: 'marketplace', label: 'Acheter', icon: Search }, { id: 'my-products', label: 'Mes produits', icon: Package }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
-  if (props.role === 'merchant') return [{ id: 'marketplace', label: 'Marketplace', icon: Search }, { id: 'my-products', label: 'Mes produits', icon: Package }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
+  if (props.role === 'farmer') return [{ id: 'my-products', label: 'Mes produits', icon: Package }, { id: 'marketplace', label: 'Marketplace', icon: Search }, { id: 'cart', label: 'Panier', icon: ShoppingCart }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
+  if (props.role === 'processor') return [{ id: 'marketplace', label: 'Acheter', icon: Search }, { id: 'my-products', label: 'Mes produits', icon: Package }, { id: 'cart', label: 'Panier', icon: ShoppingCart }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
+  if (props.role === 'merchant') return [{ id: 'marketplace', label: 'Marketplace', icon: Search }, { id: 'my-products', label: 'Mes produits', icon: Package }, { id: 'cart', label: 'Panier', icon: ShoppingCart }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
   if (props.role === 'transporter') return []
-  if (['cooperative', 'association', 'union', 'federation', 'interprofession', 'independent'].includes(props.role)) return [{ id: 'my-products', label: 'Nos produits', icon: Package }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
+  if (['cooperative', 'association', 'union', 'federation', 'interprofession', 'independent'].includes(props.role)) return [{ id: 'my-products', label: 'Nos produits', icon: Package }, { id: 'marketplace', label: 'Marketplace', icon: Search }, { id: 'cart', label: 'Panier', icon: ShoppingCart }, { id: 'orders', label: 'Commandes', icon: ShoppingCart }]
   return [{ id: 'orders', label: 'Commandes', icon: Wallet }]
 })
 

@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Bell, Plus, MessageSquare, TrendingUp, Wallet, Package, ShoppingBag, Settings, Calculator, GraduationCap } from 'lucide-vue-next'
+import { Bell, Plus, MessageSquare, TrendingUp, Wallet, Package, ShoppingBag, Settings, Calculator, GraduationCap, ShoppingCart } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import { usePaysanStore } from '@/stores/paysan'
+import { useCartStore } from '@/stores/cart'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{ user: { name: string; balance?: number } }>()
 const emit = defineEmits<{ navigate: [screen: string] }>()
 
 const paysanStore = usePaysanStore()
+const cartStore = useCartStore()
 const isLoading = ref(true)
 
 onMounted(async () => { 
@@ -52,6 +54,8 @@ const dashboardStats = computed(() => {
   }
 })
 
+const cartItemsCount = computed(() => cartStore.items.length)
+
 const getActivityIcon = (type: string) => {
   switch (type) {
     case 'NOUVELLE_COMMANDE': return ShoppingBag
@@ -84,6 +88,12 @@ const quickActions = [
           <Badge v-else variant="secondary" class="mt-2 bg-white/20 text-white border-0">Paysan</Badge>
         </div>
         <div class="flex gap-2">
+          <button @click="emit('navigate', 'cart')" class="relative w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            <ShoppingCart class="w-5 h-5" />
+            <span v-if="cartItemsCount > 0" class="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-primary">
+              {{ cartItemsCount }}
+            </span>
+          </button>
           <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><Bell class="w-5 h-5" /></button>
           <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center"><Settings class="w-5 h-5" /></button>
         </div>
