@@ -137,7 +137,7 @@ onUnmounted(() => {
               <Leaf class="w-6 h-6 text-primary" />
             </div>
             <span class="text-2xl font-bold">TITRA</span>
-            <img :src="logo" alt="TITRA Logo" class="h-12 w-auto brightness-0 invert" />
+
           </div>
 
           <!-- Main Content -->
