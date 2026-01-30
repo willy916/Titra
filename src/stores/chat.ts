@@ -61,7 +61,7 @@ export const useChatStore = defineStore('chat', () => {
         console.log('📡 Tentative de connexion WebSocket...')
 
         stompClient.value = new Client({
-            brokerURL: 'ws://127.0.0.1:8083/ws-titra',
+            brokerURL: 'ws://213.199.54.136/ws-titra',
             connectHeaders: {
                 'Authorization': 'Bearer ' + token,
                 'authorization': 'Bearer ' + token

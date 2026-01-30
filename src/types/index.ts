@@ -224,3 +224,6 @@ export type Screen =
   | "order-detail"
   | "edit-product"
   | "seller-profile"
+  | "withdrawal"
+  | "customer-orders"
+  | "my-personal-orders"

@@ -56,6 +56,7 @@ import AddMemberView from '@/views/members/AddMemberView.vue'
 import MissionsView from '@/views/transporter/MissionsView.vue'
 import CoursesView from '@/views/transporter/CoursesView.vue'
 import CartView from '@/views/cart/CartView.vue'
+import WithdrawalView from '@/views/wallet/WithdrawalView.vue'
 
 
 // Navigation
@@ -453,6 +454,13 @@ const OnboardingComponent = computed(() => {
             v-else-if="currentScreen === 'wallet' && user"
             :user="user"
             @back="handleNavigate('home')"
+            @navigate="handleNavigate"
+          />
+ 
+          <!-- Withdrawal -->
+          <WithdrawalView
+            v-else-if="currentScreen === 'withdrawal'"
+            @back="handleNavigate('wallet')"
             @navigate="handleNavigate"
           />
 

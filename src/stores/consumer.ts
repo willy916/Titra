@@ -114,49 +114,11 @@ export const useConsumerStore = defineStore('consumer', () => {
         }
     }
 
-    async function initiatePayment(orderId: string) {
-        isLoading.value = true
-        try {
-            const response = await api.post(`/api/payment/initiate/${orderId}`)
-            const data = response.data.body || response.data.data || response.data
-            return {
-                success: data.success || true,
-                paymentUrl: data.paymentUrl,
-                token: data.token,
-                orderId: data.orderId || orderId
-            }
-        } catch (error) {
-            console.error('Initiate payment error:', error)
-            throw error
-        } finally {
-            isLoading.value = false
-        }
-    }
-
-    async function checkPaymentStatus(orderId: string) {
-        isLoading.value = true
-        try {
-            const response = await api.get(`/api/payment/status/${orderId}`)
-            const data = response.data.body || response.data.data || response.data
-            return {
-                isPaid: data.isPaid || false,
-                status: data.status || 'EN_ATTENTE_PAIEMENT'
-            }
-        } catch (error) {
-            console.error('Check payment status error:', error)
-            throw error
-        } finally {
-            isLoading.value = false
-        }
-    }
-
     return {
         isLoading,
         orders,
         dashboardStats,
         fetchOrders,
         fetchDashboardStats,
-        initiatePayment,
-        checkPaymentStatus
     }
 })

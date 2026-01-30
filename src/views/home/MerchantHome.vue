@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onBeforeMount } from 'vue'
 import { Search, ShoppingCart, Package, TrendingUp, Bell, Settings, Truck, Store, Calculator } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
@@ -14,20 +14,16 @@ const merchantStore = useMerchantStore()
 const cartStore = useCartStore()
 const isLoading = ref(true)
 
-onMounted(async () => { 
+onBeforeMount(async () => {
   try {
     await merchantStore.fetchDashboardStats()
   } finally {
-    isLoading.value = false 
+    isLoading.value = false
   }
 })
 
-const activeOrders = [
-  { id: '1', product: 'Igname', seller: 'Koné Ibrahim', quantity: '200kg', status: 'En préparation', delivery: 'Demain' },
-  { id: '2', product: 'Tomate', seller: 'Coopérative Divo', quantity: '50kg', status: 'En livraison', delivery: "Aujourd'hui" },
-]
-
 const cartItemsCount = computed(() => cartStore.items.length)
+const recentPurchases = computed(() => merchantStore.stats?.recentPurchases || [])
 </script>
 
 <template>
@@ -101,19 +97,25 @@ const cartItemsCount = computed(() => cartStore.items.length)
               </div>
             </Card>
           </template>
-          <template v-else>
-            <Card v-for="order in activeOrders" :key="order.id" class="p-4">
+          <template v-else-if="recentPurchases.length > 0">
+            <Card v-for="(order, index) in recentPurchases" :key="index" class="p-4">
               <div class="flex items-start justify-between mb-3">
                 <div>
-                  <p class="font-medium">{{ order.product }}</p>
-                  <p class="text-sm text-muted-foreground">{{ order.seller }}</p>
+                  <p class="font-medium">{{ order.productName }}</p>
+                  <p class="text-sm text-muted-foreground">{{ order.sellerName }}</p>
                   <p class="text-sm text-primary mt-1">{{ order.quantity }}</p>
                 </div>
-                <Badge :variant="order.status === 'En livraison' ? 'default' : 'secondary'">{{ order.status }}</Badge>
+                <Badge :variant="['EN_LIVRAISON', 'EN_COURS', 'DELIVERED'].includes(order.status) ? 'default' : 'secondary'">{{ order.statusDisplayName }}</Badge>
               </div>
               <div class="flex items-center gap-2 text-sm text-muted-foreground">
-                <Truck class="w-4 h-4" /><span>Livraison : {{ order.delivery }}</span>
+                <Truck class="w-4 h-4" /><span>{{ order.deliveryInfo }}</span>
               </div>
+            </Card>
+          </template>
+          <template v-else>
+            <Card class="p-8 text-center border-dashed">
+              <Package class="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+              <p class="text-sm text-muted-foreground">Aucun achat récent</p>
             </Card>
           </template>
         </div>

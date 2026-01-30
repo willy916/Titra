@@ -7,6 +7,7 @@ import type { User } from '@/types'
 import { usePaysanStore } from '@/stores/paysan'
 import { useTransformerStore } from '@/stores/transformer'
 import { useMerchantStore } from '@/stores/merchant'
+import { useWalletStore } from '@/stores/wallet'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{ user: User }>()
@@ -15,6 +16,7 @@ const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 const paysanStore = usePaysanStore()
 const transformerStore = useTransformerStore()
 const merchantStore = useMerchantStore()
+const walletStore = useWalletStore()
 
 const isLoading = ref(true)
 const activeTab = ref('all')
@@ -29,16 +31,36 @@ const store = computed(() => {
 
 onMounted(async () => {
   try {
-    await store.value.fetchWallet()
+    await walletStore.fetchWallet()
   } catch (error) {
     console.error('Error fetching wallet:', error)
-    toast.error('Erreur lors du chargement du portefeuille')
+    // Fallback to role-specific store if unified fails or isn't ready
+    try {
+      await store.value.fetchWallet()
+    } catch (e) {
+      toast.error('Erreur lors du chargement du portefeuille')
+    }
   } finally {
     isLoading.value = false
   }
 })
 
 const walletData = computed(() => {
+  // Try unified store first
+  if (walletStore.walletData) {
+    return {
+      soldeDisponible: walletStore.walletData.soldeDisponible,
+      soldeEscrow: walletStore.walletData.soldeEnAttente,
+      statsMois: {
+        nombreVentes: walletStore.walletData.totalVentesCeMois,
+        revenuTotalBrut: walletStore.walletData.revenuTotalCeMois,
+        totalCommissions: walletStore.walletData.commissionCeMois
+      },
+      evolutionRevenus: [], // Wallet store currently doesn't have history
+      transactions: walletStore.walletData.transactions || []
+    }
+  }
+
   const base = store.value.wallet || {}
   
   if (isProcessor.value || isMerchant.value) {

@@ -1,30 +1,44 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ArrowLeft, ShoppingCart, Users } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const emit = defineEmits<{ 
   back: []
   navigate: [screen: string, data?: any] 
 }>()
 
-const orderTypes = [
-  {
-    id: 'customer-orders',
-    title: 'Commandes clients',
-    description: 'Gérer les commandes de vos clients',
-    icon: Users,
-    color: 'bg-primary',
-    screen: 'customer-orders'
-  },
-  {
-    id: 'my-orders',
-    title: 'Mes commandes',
-    description: 'Suivre vos commandes personnelles',
-    icon: ShoppingCart,
-    color: 'bg-accent',
-    screen: 'my-personal-orders'
+const authStore = useAuthStore()
+const userRole = computed(() => authStore.user?.role)
+
+const orderTypes = computed(() => {
+  const isSimplified = ['interprofession', 'cooperative', 'farmer'].includes(userRole.value || '')
+  
+  const types = [
+    {
+      id: 'customer-orders',
+      title: isSimplified ? 'Commandes' : 'Commandes clients',
+      description: isSimplified ? 'Gérer les commandes' : 'Gérer les commandes de vos clients',
+      icon: Users,
+      color: 'bg-primary',
+      screen: 'customer-orders'
+    },
+    {
+      id: 'my-orders',
+      title: 'Mes commandes',
+      description: 'Suivre vos commandes personnelles',
+      icon: ShoppingCart,
+      color: 'bg-accent',
+      screen: 'my-personal-orders'
+    }
+  ]
+
+  if (isSimplified) {
+    return types.filter(t => t.id !== 'my-orders')
   }
-]
+  return types
+})
 </script>
 
 <template>

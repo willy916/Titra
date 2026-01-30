@@ -77,9 +77,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       // Map existing user data if available in the direct message or data object
-      const apiUser = data.user || response.data.message || data
+      const message = response.data.message || response.data.body || response.data
+      const { user: apiUserInner, profile, isTeamMember, fullName, roleName: teamRoleName } = message
+      const apiUser = apiUserInner || data.user || data
 
       console.log('API User object:', apiUser)
+      console.log('Is Team Member:', isTeamMember)
 
       // Role mapping helper
       const mapApiRoleToSlug = (roleName: string): UserRole => {
@@ -111,10 +114,16 @@ export const useAuthStore = defineStore('auth', () => {
         return mapping[roleName] || mapping[roleName.toUpperCase()] || 'USER'
       }
 
-      const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : 'USER'
+      let roleSlug: UserRole = 'USER'
+      if (isTeamMember && profile?.utilisateur?.roleActor?.name) {
+        roleSlug = mapApiRoleToSlug(profile.utilisateur.roleActor.name)
+      } else if (apiUser.roleActor?.name) {
+        roleSlug = mapApiRoleToSlug(apiUser.roleActor.name)
+      }
 
       // Try to find a name in all possible fields
-      const userName = apiUser.name ||
+      const userName = fullName ||
+        apiUser.name ||
         (apiUser.firstName && apiUser.lastName ? `${apiUser.firstName} ${apiUser.lastName}` : null) ||
         apiUser.firstName ||
         apiUser.phoneNumber ||
@@ -127,15 +136,14 @@ export const useAuthStore = defineStore('auth', () => {
         name: userName,
         role: roleSlug,
         verified: apiUser.verified,
-        onboardingCompleted: apiUser.completed === true,
-        currentOnboardingStep: apiUser.completed ? undefined : 1
+        onboardingCompleted: apiUser.completed === true || (isTeamMember && !!profile),
+        currentOnboardingStep: (apiUser.completed || (isTeamMember && !!profile)) ? undefined : 1,
+        isTeamMember: !!isTeamMember,
+        teamRole: teamRoleName || message.teamRole
       } as User
 
-      // Override role if it's generic user but we are in a flow where we might know better?
-      // No, trust the backend. If backend says 'Commerçant' but completed=false, app will redirect to onboarding.
-
       // Store role-specific name for dashboard display
-      if (roleSlug) {
+      if (roleSlug && roleSlug !== 'USER') {
         (mappedUser as any)[roleSlug] = userName
       }
 
@@ -177,6 +185,7 @@ export const useAuthStore = defineStore('auth', () => {
     selectedRole.value = null
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
+    localStorage.removeItem('user')
   }
 
   async function initializeAuth() {
@@ -616,6 +625,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function getInterprofessionMembersCombined() {
+    isLoading.value = true
+    try {
+      const response = await api.get('/api/interprofession/members-combined')
+      return response.data.body || response.data
+    } catch (error) {
+      console.error('Get interprofession members combined error:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   async function getAllFilieres(): Promise<any[]> {
     isLoading.value = true
     try {
@@ -635,7 +657,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.get('/api/user/me')
       console.log('Fetch Current User Response:', response.data)
       const message = response.data.message || response.data.body || response.data
-      const { user: apiUser, profile } = message
+      const { user: apiUserInner, profile, isTeamMember, fullName, roleName: teamRoleName } = message
+      const apiUser = apiUserInner || message.user || message
 
       if (!apiUser) throw new Error('User data not found')
 
@@ -666,19 +689,24 @@ export const useAuthStore = defineStore('auth', () => {
           'INTERPROFESSION': 'interprofession',
           'Interprofessionnalité': 'interprofession'
         }
-        return mapping[roleName] || 'farmer'
+        return mapping[roleName] || mapping[roleName.toUpperCase()] || 'farmer'
       }
 
-      const roleSlug = apiUser.roleActor?.name ? mapApiRoleToSlug(apiUser.roleActor.name) : (user.value?.role || 'farmer')
+      let roleSlug: UserRole = 'farmer'
+      if (isTeamMember && profile?.utilisateur?.roleActor?.name) {
+        roleSlug = mapApiRoleToSlug(profile.utilisateur.roleActor.name)
+      } else if (apiUser.roleActor?.name) {
+        roleSlug = mapApiRoleToSlug(apiUser.roleActor.name)
+      } else {
+        roleSlug = user.value?.role || 'farmer'
+      }
 
-      // Try to find a name in all possible fields
-      let userName = apiUser.name || apiUser.phoneNumber || 'Utilisateur'
+      // Determine name
+      let userName = fullName || profile?.name || apiUser.name || apiUser.phoneNumber || 'Utilisateur'
 
-      if (profile) {
-        if (profile.name) {
-          userName = profile.name
-        } else if (profile.firstName || profile.lastName) {
-          userName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
+      if (!fullName && profile) {
+        if (profile.firstName || profile.lastName) {
+          userName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || userName
         }
       }
 
@@ -690,6 +718,8 @@ export const useAuthStore = defineStore('auth', () => {
         role: roleSlug,
         verified: apiUser.verified,
         onboardingCompleted: apiUser.completed || (!!profile), // Assume completed if profile exists
+        isTeamMember: !!isTeamMember,
+        teamRole: teamRoleName || message.teamRole,
         photo: message.avatarUrl || (profile && profile.avatarUrl) || (profile && profile.avatarPath) || (user.value?.photo || undefined),
         matricule: (profile && (profile.matricule || profile.codePaysan)) ? (profile.matricule || profile.codePaysan) : undefined
       } as User
@@ -785,8 +815,8 @@ export const useAuthStore = defineStore('auth', () => {
     getAllUnions,
     getAllFederations,
     getAllInterprofessions,
+    getInterprofessionMembersCombined,
     getAllFilieres,
     fetchCurrentUser,
   }
-}
-)
+})

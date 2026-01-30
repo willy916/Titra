@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ArrowLeft, UserPlus, Building2, Landmark, Briefcase, User, Tractor, Sprout, Users } from 'lucide-vue-next'
+import { ArrowLeft, UserPlus, Building2, Landmark, Briefcase, User, Tractor, Sprout, Users, Phone } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useCooperativeStore } from '@/stores/cooperative'
 import Card from '@/components/ui/Card.vue'
@@ -145,8 +145,8 @@ const formatPhoneToIvoryCoast = (phone: string) => {
     cleaned = cleaned.substring(3)
   }
   
-  // Return format: +225XXXXXXXXXX (no spaces)
-  return `+225${cleaned}`
+  // Return format: 225XXXXXXXXXX (no spaces, NO +)
+  return `225${cleaned}`
 }
 
 const isPhoneLengthValid = (phone: string) => {
@@ -292,7 +292,16 @@ const handleSubmit = async () => {
         </Card>
 
         <div class="space-y-2"><Label>Nom complet *</Label><Input v-model="teamMemberFormData.name" placeholder="Nom et prénom" /></div>
-        <div class="space-y-2"><Label>Téléphone *</Label><Input v-model="teamMemberFormData.phone" type="tel" placeholder="+225 XX XX XX XX XX" /></div>
+        <div class="space-y-2">
+          <Label>Téléphone *</Label>
+          <div class="flex gap-2">
+            <div class="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border flex-shrink-0">
+              <Phone class="w-4 h-4 text-muted-foreground" />
+              <span class="text-sm">+225</span>
+            </div>
+            <Input v-model="teamMemberFormData.phone" type="tel" placeholder="07 XX XX XX XX" class="flex-1" />
+          </div>
+        </div>
         <div class="space-y-2"><Label>Email</Label><Input v-model="teamMemberFormData.email" type="email" placeholder="email@exemple.com" /></div>
         <div class="space-y-2">
           <Label>Rôle *</Label>
@@ -324,7 +333,16 @@ const handleSubmit = async () => {
         </div>
         <div class="space-y-2"><Label>Numéro d'enregistrement</Label><Input v-model="structureFormData.legalNumber" placeholder="Numéro légal" /></div>
         <div class="space-y-2"><Label>Nom du président *</Label><Input v-model="structureFormData.president" placeholder="Nom du président" /></div>
-        <div class="space-y-2"><Label>Téléphone *</Label><Input v-model="structureFormData.phone" type="tel" placeholder="+225 XX XX XX XX XX" /></div>
+        <div class="space-y-2">
+          <Label>Téléphone *</Label>
+          <div class="flex gap-2">
+            <div class="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border flex-shrink-0">
+              <Phone class="w-4 h-4 text-muted-foreground" />
+              <span class="text-sm">+225</span>
+            </div>
+            <Input v-model="structureFormData.phone" type="tel" placeholder="07 XX XX XX XX" class="flex-1" />
+          </div>
+        </div>
         <div class="space-y-2"><Label>Email</Label><Input v-model="structureFormData.email" type="email" placeholder="contact@structure.ci" /></div>
         <div class="space-y-2"><Label>Localisation *</Label><Input v-model="structureFormData.location" placeholder="Ville ou région" /></div>
         <div class="space-y-2"><Label>Nombre de membres</Label><Input v-model="structureFormData.memberCount" type="number" placeholder="Ex: 150" /></div>
@@ -350,7 +368,16 @@ const handleSubmit = async () => {
 
           <div class="space-y-2"><Label>Prénom *</Label><Input v-model="farmerFormData.firstName" placeholder="Prénom du producteur" /></div>
           <div class="space-y-2"><Label>Nom *</Label><Input v-model="farmerFormData.lastName" placeholder="Nom du producteur" /></div>
-          <div class="space-y-2"><Label>Numéro de téléphone *</Label><Input v-model="farmerFormData.phone" type="tel" placeholder="+225 XX XX XX XX XX" /></div>
+          <div class="space-y-2">
+            <Label>Numéro de téléphone *</Label>
+            <div class="flex gap-2">
+              <div class="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border flex-shrink-0">
+                <Phone class="w-4 h-4 text-muted-foreground" />
+                <span class="text-sm">+225</span>
+              </div>
+              <Input v-model="farmerFormData.phone" type="tel" placeholder="07 XX XX XX XX" class="flex-1" />
+            </div>
+          </div>
           <div class="space-y-2"><Label>Village / Localité *</Label><Input v-model="farmerFormData.village" placeholder="Ex: Village Koffikro" /></div>
           <div class="space-y-2"><Label>Sous-préfecture / Région *</Label><Input v-model="farmerFormData.location" placeholder="Ex: Yamoussoukro" /></div>
 

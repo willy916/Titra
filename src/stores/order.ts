@@ -42,7 +42,7 @@ export const useOrderStore = defineStore('order', () => {
                 return '/api/transform/my-purchases'
             }
             if (role === 'merchant') {
-                return '/api/commercant/my-purchases'
+                return '/api/commercant/purchases'
             }
             if (role === 'farmer') {
                 return '/api/paysan/my-purchases'
@@ -51,7 +51,7 @@ export const useOrderStore = defineStore('order', () => {
         return '/api/consommateur/orders'
     }
 
-    async function fetchMyOrders(status?: string) {
+    async function fetchMyOrders(status: string = 'EN_ATTENTE,EN_PREPARATION,EN_COURS') {
         isLoading.value = true
         try {
             const baseUrl = getBaseUrl()
@@ -92,10 +92,10 @@ export const useOrderStore = defineStore('order', () => {
         }
     }
 
-    async function fetchOrderDetails(id: string) {
+    async function fetchOrderDetails(id: string, isPersonal: boolean = false) {
         isLoading.value = true
         try {
-            const baseUrl = getBaseUrl()
+            const baseUrl = isPersonal ? getPersonalOrdersBaseUrl() : getBaseUrl()
             const response = await api.get(`${baseUrl}/${id}`)
             return response.data.body || response.data.data || response.data
         } catch (error) {

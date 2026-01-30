@@ -58,7 +58,11 @@ const getStatusConfig = (status: string) => {
 }
 
 // Progress steps for order tracking
-const getOrderProgress = (status: string) => {
+const getOrderProgress = (order: any) => {
+  if (order.trackingSteps && order.trackingSteps.length > 0) {
+    return order.trackingSteps
+  }
+
   const steps = [
     { id: 'EN_ATTENTE', label: 'Confirmée', active: false, completed: false },
     { id: 'EN_PREPARATION', label: 'Préparation', active: false, completed: false },
@@ -66,6 +70,7 @@ const getOrderProgress = (status: string) => {
     { id: 'LIVREE', label: 'Livrée', active: false, completed: false }
   ]
 
+  const status = order.status
   const statusOrder = ['EN_ATTENTE', 'EN_PREPARATION', 'EN_COURS', 'LIVREE']
   const currentIndex = statusOrder.indexOf(status)
 
@@ -81,18 +86,32 @@ const getOrderProgress = (status: string) => {
 }
 
 const mappedOrders = computed(() => {
-  return (orderStore.personalOrders || orderStore.orders).map((o: any) => ({
-    id: o.id,
-    orderNumber: o.orderNumber || `CMD-${o.id.slice(0, 8)}`,
-    date: o.orderDate ? new Date(o.orderDate) : new Date(),
-    status: o.orderStatus,
-    sellerName: o.sellerName || 'Vendeur inconnu',
-    total: o.totalAmount || 0,
-    product: o.product,
-    quantity: o.quantity || 0,
-    unitPrice: o.unitPrice || 0,
-    deliveryAddress: o.deliveryAddress || 'Adresse non spécifiée'
-  }))
+  return (orderStore.personalOrders || []).map((o: any) => {
+    const orderObj = {
+      id: o.id,
+      orderNumber: o.orderNumber || `CMD-${o.id.slice(0, 8)}`,
+      date: o.orderDate ? new Date(o.orderDate) : new Date(),
+      status: o.status || o.orderStatus,
+      statusLabel: o.paymentStatusLabel || o.statusDisplayName || statusConfig[o.status || o.orderStatus]?.label || (o.status || o.orderStatus),
+      sellerName: o.sellerName || (o.seller ? `${o.seller.firstName || ''} ${o.seller.lastName || ''}`.trim() : 'Vendeur inconnu'),
+      total: o.totalAmount || 0,
+      product: {
+        nom: o.productName || o.productNameSnapshot || 'Produit sans nom',
+        photos: o.productPhoto ? [o.productPhoto] : (o.productPhotoSnapshot ? [o.productPhotoSnapshot] : []),
+        categorie: o.productCategory || (o.product ? o.product.categorie : 'Catégorie')
+      },
+      quantityDisplay: o.quantityInfo || `${o.quantity || 0} ${o.product?.unite || 'unité(s)'}`,
+      unitPrice: o.unitPrice || 0,
+      deliveryAddress: o.deliveryAddress || 'Adresse non spécifiée',
+      trackingSteps: o.trackingSteps || []
+    }
+    
+    // Add pre-calculated progress steps
+    return {
+      ...orderObj,
+      progressSteps: getOrderProgress(orderObj)
+    }
+  })
 })
 
 const emptyMessages: Record<string, string> = {
@@ -159,7 +178,7 @@ const emptyMessages: Record<string, string> = {
               <p class="text-xs text-muted-foreground">{{ order.date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) }}</p>
             </div>
             <Badge :class="`${getStatusConfig(order.status).color} text-white border-0`">
-              {{ getStatusConfig(order.status).label }}
+              {{ order.statusLabel }}
             </Badge>
           </div>
 
@@ -174,9 +193,9 @@ const emptyMessages: Record<string, string> = {
             </div>
             <div class="flex-1">
               <p class="font-medium text-sm line-clamp-1">{{ order.product?.nom || 'Produit sans nom' }}</p>
-              <p class="text-xs text-muted-foreground mb-2">{{ order.product?.categorie }}</p>
+              <p class="text-xs text-muted-foreground mb-2">{{ order.product?.categorie || 'Catégorie' }}</p>
               <div class="flex items-center gap-2">
-                <Badge variant="outline" class="text-[10px]">{{ order.quantity }} {{ order.product?.unite || 'unité(s)' }}</Badge>
+                <Badge variant="outline" class="text-[10px]">{{ order.quantityDisplay }}</Badge>
                 <span class="text-xs text-muted-foreground">x {{ order.unitPrice.toLocaleString() }} F</span>
               </div>
             </div>
@@ -188,13 +207,13 @@ const emptyMessages: Record<string, string> = {
             <div class="relative">
               <div class="flex justify-between items-center">
                 <div
-                  v-for="(step, index) in getOrderProgress(order.status)"
-                  :key="step.id"
+                  v-for="(step, index) in order.progressSteps"
+                  :key="index"
                   class="flex-1 flex flex-col items-center relative"
                 >
                   <!-- Progress Line -->
                   <div
-                    v-if="index < getOrderProgress(order.status).length - 1"
+                    v-if="(index as number) < order.progressSteps.length - 1"
                     :class="[
                       'absolute top-3 left-1/2 w-full h-0.5',
                       step.completed ? 'bg-primary' : 'bg-muted'

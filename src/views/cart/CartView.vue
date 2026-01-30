@@ -1,18 +1,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ArrowLeft, Minus, Plus, Trash2, ShoppingCart } from 'lucide-vue-next'
+import { ArrowLeft, Minus, Plus, Trash2, ShoppingCart, MapPin } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
+import Input from '@/components/ui/Input.vue'
+import Label from '@/components/ui/Label.vue'
 import { useCartStore } from '@/stores/cart'
-import { useConsumerStore } from '@/stores/consumer'
+import { useWalletStore } from '@/stores/wallet'
+import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
 
 const emit = defineEmits<{ back: []; navigate: [screen: string] }>()
 
 const cartStore = useCartStore()
-const consumerStore = useConsumerStore()
+const walletStore = useWalletStore()
+const authStore = useAuthStore()
+const userRole = computed(() => authStore.user?.role)
 const isLoading = ref(true)
 const isCheckingOut = ref(false)
+const deliveryAddress = ref(authStore.user?.location || '')
 
 onMounted(async () => {
   try {
@@ -48,29 +54,42 @@ const handleCheckout = async () => {
     return
   }
 
+  if (!deliveryAddress.value) {
+    toast.error('Veuillez renseigner une adresse de livraison')
+    return
+  }
+
   isCheckingOut.value = true
   try {
     // 1. Créer les commandes
-    const orders = await cartStore.checkout()
+    const orders = await cartStore.checkout(deliveryAddress.value)
     
     if (!orders || orders.length === 0) {
       toast.error('Erreur lors de la création de la commande')
       return
     }
 
-    // 2. Initier le paiement pour la première commande
+    // 2. Initier le paiement
     const firstOrder = Array.isArray(orders) ? orders[0] : orders
-    const orderId = firstOrder.id
+    const orderId = firstOrder.id || firstOrder.orderId
 
-    const paymentData = await consumerStore.initiatePayment(orderId)
-    
-    if (paymentData.success && paymentData.paymentUrl) {
-      toast.success('Redirection vers le paiement...')
-      // Redirection vers PayTech
-      window.location.href = paymentData.paymentUrl
-    } else {
-      toast.success('Commande créée !', { 
-        description: 'Vous pouvez finaliser le paiement depuis vos commandes' 
+    try {
+      // On utilise initiatePayment du walletStore
+      const paymentData = await walletStore.initiatePayment(orderId)
+      
+      if (paymentData.success && paymentData.paymentUrl) {
+        toast.success('Redirection vers le paiement...')
+        window.location.href = paymentData.paymentUrl
+      } else {
+        toast.success('Commande créée !', { 
+          description: 'L\'initiation du paiement a échoué. Vous pourrez réessayer depuis vos commandes.' 
+        })
+        emit('navigate', 'orders')
+      }
+    } catch (paymentError) {
+      console.error('Payment initiation error:', paymentError)
+      toast.success('Commande créée avec succès !', { 
+        description: 'Cependant, le service de paiement est indisponible. Vous pourrez payer plus tard.' 
       })
       emit('navigate', 'orders')
     }
@@ -201,6 +220,22 @@ const handleCheckout = async () => {
             </div>
           </Card>
         </template>
+
+        <!-- Delivery Address -->
+        <Card class="p-4 bg-muted/30">
+          <div class="flex items-center gap-2 mb-3">
+            <MapPin class="w-5 h-5 text-primary" />
+            <Label class="font-semibold">Adresse de livraison</Label>
+          </div>
+          <Input 
+            v-model="deliveryAddress" 
+            placeholder="Ex: Abidjan, Cocody Angré 7e Tranche" 
+            class="bg-white"
+          />
+          <p class="text-[10px] text-muted-foreground mt-2">
+            Spécifiez l'endroit exact où vous souhaitez être livré.
+          </p>
+        </Card>
       </div>
 
       <!-- Summary - Fixed Bottom -->

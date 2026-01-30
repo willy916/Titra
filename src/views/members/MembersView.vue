@@ -26,6 +26,14 @@ const isCooperative = computed(() => props.userRole === 'cooperative')
 const isAssociation = computed(() => props.userRole === 'association')
 const isInterprofession = computed(() => props.userRole === 'interprofession')
 
+const interprofessionStats = ref({
+  totalFederations: 0,
+  totalUnions: 0,
+  totalCooperatives: 0,
+  totalAssociations: 0,
+  totalStrategicActors: 0
+})
+
 onMounted(async () => {
   isLoading.value = true
   try {
@@ -39,13 +47,15 @@ onMounted(async () => {
       ])
       data = [...coops, ...assos]
     } else if (isInterprofession.value) {
-      const [feds, unis, coops, assos] = await Promise.all([
-        authStore.getAllFederations(),
-        authStore.getAllUnions(),
-        authStore.getAllCooperatives(),
-        authStore.getAllAssociations()
-      ])
-      data = [...feds, ...unis, ...coops, ...assos]
+      const result = await authStore.getInterprofessionMembersCombined()
+      data = result.members || []
+      interprofessionStats.value = {
+        totalFederations: result.totalFederations || 0,
+        totalUnions: result.totalUnions || 0,
+        totalCooperatives: result.totalCooperatives || 0,
+        totalAssociations: result.totalAssociations || 0,
+        totalStrategicActors: result.totalStrategicActors || 0
+      }
     } else if (isCooperative.value || isAssociation.value) {
       // Pour une coop/asso, on fetch les membres paysans et l'équipe
       const [membersData, teamData] = await Promise.all([
@@ -87,16 +97,16 @@ const members = computed(() => {
     return {
       id: m.id,
       name: m.name,
-      type: m.matricule?.includes('FED') ? 'Fédération' : 
+      type: m.type || (m.matricule?.includes('FED') ? 'Fédération' : 
             m.matricule?.includes('UNION') ? 'Union' : 
-            m.matricule?.includes('COOP') ? 'Coopérative' : 'Association',
+            m.matricule?.includes('COOP') ? 'Coopérative' : 'Association'),
       matricule: m.matricule || 'N/A',
-      phone: m.contactPhone || 'N/A',
+      phone: m.contactPhone || m.phone || 'N/A',
       location: m.adresse || m.location || 'N/A',
       region: m.region || 'N/A',
       membersCount: m.numberOfMembers || 0,
       productsCount: 0,
-      status: 'active',
+      status: m.isActive === false ? 'inactive' : 'active',
       joinDate: m.createdAt ? new Date(m.createdAt).toLocaleDateString() : 'N/A',
       sector: m.filiere?.libelle || 'N/A'
     }
@@ -141,15 +151,11 @@ const typeStats = computed(() => {
     return [{ label: 'Coopératives', count: coops, color: 'text-primary' }, { label: 'Associations', count: assos, color: 'text-secondary' }]
   }
   if (isInterprofession.value) {
-    const feds = members.value.filter(m => m.type === 'Fédération').length
-    const unions = members.value.filter(m => m.type === 'Union').length
-    const coops = members.value.filter(m => m.type === 'Coopérative').length
-    const assos = members.value.filter(m => m.type === 'Association').length
     return [
-      { label: 'Fédérations', count: feds, color: 'text-primary' },
-      { label: 'Unions', count: unions, color: 'text-secondary' },
-      { label: 'Coopératives', count: coops, color: 'text-primary' },
-      { label: 'Associations', count: assos, color: 'text-secondary' },
+      { label: 'Fédérations', count: interprofessionStats.value.totalFederations, color: 'text-primary' },
+      { label: 'Unions', count: interprofessionStats.value.totalUnions, color: 'text-secondary' },
+      { label: 'Coopératives', count: interprofessionStats.value.totalCooperatives, color: 'text-primary' },
+      { label: 'Associations', count: interprofessionStats.value.totalAssociations, color: 'text-secondary' },
     ]
   }
   // Coopérative / Association

@@ -11,6 +11,14 @@ export interface MerchantStats {
     monthlySpending: number
     completedOrdersCount: number
     averageOrderAmount: number
+    recentPurchases: Array<{
+        productName: string
+        sellerName: string
+        quantity: string
+        deliveryInfo: string
+        status: string
+        statusDisplayName: string
+    }>
 }
 
 export interface WalletState {

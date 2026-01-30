@@ -13,39 +13,19 @@ const orderStore = useOrderStore()
 const isLoading = ref(true)
 
 const tabs = computed(() => {
-  if (props.userRole === 'processor' || props.userRole === 'merchant') {
-    return [
-      { id: 'pending', label: 'En attente' },
-      { id: 'preparing', label: 'Préparation' },
-      { id: 'shipped', label: 'En route' },
-      { id: 'delivered', label: 'Livrées' },
-      { id: 'cancelled', label: 'Annulées' }
-    ]
-  }
   return [
-    { id: 'preparing', label: 'Préparation' },
     { id: 'in_progress', label: 'En cours' },
     { id: 'delivered', label: 'Livrées' },
     { id: 'cancelled', label: 'Annulées' }
   ]
 })
 
-const activeTab = ref(props.userRole === 'processor' || props.userRole === 'merchant' ? 'pending' : 'preparing')
+const activeTab = ref('in_progress')
 
 // Map UI tabs to API statuses
 const statusMap = computed<Record<string, string>>(() => {
-  if (props.userRole === 'processor' || props.userRole === 'merchant') {
-    return {
-      pending: 'EN_ATTENTE',
-      preparing: 'EN_PREPARATION',
-      shipped: 'EN_COURS',
-      delivered: 'LIVREE',
-      cancelled: 'ANNULEE'
-    }
-  }
   return {
-    preparing: 'EN_PREPARATION',
-    in_progress: 'EN_COURS',
+    in_progress: 'EN_ATTENTE,EN_PREPARATION,EN_COURS',
     delivered: 'LIVREE',
     cancelled: 'ANNULEE'
   }
@@ -83,20 +63,24 @@ const mappedOrders = computed(() => {
     id: o.id,
     orderNumber: o.orderNumber || `CMD-${o.id.slice(0, 8)}`,
     date: o.orderDate ? new Date(o.orderDate) : new Date(),
-    status: o.orderStatus,
-    buyerName: o.customerName || o.buyerName || 'Client inconnu',
+    status: o.status || o.orderStatus,
+    statusLabel: o.statusDisplayName || o.paymentStatusLabel || o.status || o.orderStatus,
+    buyerName: o.clientName || o.buyerName || o.customerName || 'Client inconnu',
     total: o.totalAmount || 0,
-    product: o.product, // { nom, categorie, photos: [] }
+    product: {
+      nom: o.productName || o.productNameSnapshot || (o.product?.nom) || 'Produit sans nom',
+      categorie: o.productCategory || (o.product?.categorie) || 'Catégorie',
+      photos: o.productPhoto ? [o.productPhoto] : (o.product?.photos || []),
+      unite: o.unit || (o.product?.unite) || ''
+    },
     quantity: o.quantity || 0,
+    quantityDisplay: o.quantityInfo || `${o.quantity || 0} ${o.unit || o.product?.unite || ''}`,
     unitPrice: o.unitPrice || 0
   }))
 })
 
 const emptyMessages: Record<string, string> = {
-  pending: 'Aucune commande en attente',
-  preparing: 'Aucune commande en préparation',
-  in_progress: 'Aucune commande en cours de livraison',
-  shipped: 'Aucune commande expédiée',
+  in_progress: 'Aucune commande en cours',
   delivered: 'Aucune commande livrée',
   cancelled: 'Aucune commande annulée',
 }
@@ -113,7 +97,7 @@ const emptyMessages: Record<string, string> = {
       </div>
 
       <!-- Tabs -->
-      <div :class="['grid border-t', tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4']">
+      <div class="grid grid-cols-3 border-t">
         <button
           v-for="tab in tabs"
           :key="tab.id"
@@ -157,7 +141,7 @@ const emptyMessages: Record<string, string> = {
               <p class="text-xs text-muted-foreground">{{ order.date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) }}</p>
             </div>
             <Badge :class="`${getStatusConfig(order.status).color} text-white border-0`">
-              {{ getStatusConfig(order.status).label }}
+              {{ order.statusLabel || getStatusConfig(order.status).label }}
             </Badge>
           </div>
 
@@ -174,7 +158,7 @@ const emptyMessages: Record<string, string> = {
               <p class="font-medium text-sm line-clamp-1">{{ order.product?.nom || 'Produit sans nom' }}</p>
               <p class="text-xs text-muted-foreground mb-2">{{ order.product?.categorie }}</p>
               <div class="flex items-center gap-2">
-                <Badge variant="outline" class="text-[10px]">{{ order.quantity }} {{ order.product?.unite || 'unité(s)' }}</Badge>
+                <Badge variant="outline" class="text-[10px]">{{ order.quantityDisplay }}</Badge>
                 <span class="text-xs text-muted-foreground">x {{ order.unitPrice.toLocaleString() }} F</span>
               </div>
             </div>

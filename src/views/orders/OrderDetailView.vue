@@ -1,23 +1,27 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { ArrowLeft, MapPin, Phone, MessageSquare, Package, Truck, CheckCircle, Clock, XCircle, Loader2, Wallet } from 'lucide-vue-next'
+import { ArrowLeft, MapPin, Phone, MessageSquare, Package, Truck, CheckCircle, Clock, XCircle, Loader2, Wallet, CreditCard } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Avatar from '@/components/ui/Avatar.vue'
 import { useOrderStore } from '@/stores/order'
+import { useWalletStore } from '@/stores/wallet'
 import { toast } from 'vue-sonner'
 
 const props = defineProps<{ order: any; userRole: string }>()
 const emit = defineEmits<{ back: []; navigate: [screen: string, data?: any] }>()
 
 const orderStore = useOrderStore()
+const walletStore = useWalletStore()
 const isLoading = ref(false)
 const isUpdating = ref(false)
+const isPaying = ref(false)
 const orderDetails = ref<any>(null)
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   'EN_ATTENTE': { label: 'En attente', color: 'bg-amber-400', icon: Clock },
+  'PAYEE': { label: 'Payée', color: 'bg-green-500', icon: CheckCircle },
   'EN_PREPARATION': { label: 'Préparation', color: 'bg-amber-600', icon: Package },
   'EN_COURS': { label: 'Expédiée', color: 'bg-blue-600', icon: Truck },
   'LIVREE': { label: 'Livrée', color: 'bg-green-600', icon: CheckCircle },
@@ -27,14 +31,25 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 async function fetchDetails() {
   isLoading.value = true
   try {
-    const data = await orderStore.fetchOrderDetails(props.order.id)
+    // Determine if we need normalization (raw list item) or if it's already detailed
+    const data = props.order
+    
+    // Normalize data locally without API call
     orderDetails.value = {
       ...data,
-      buyerName: data.customerName || data.buyerName || 'Client'
+      orderStatus: data.status || data.orderStatus,
+      buyerName: data.clientName || data.customerName || data.buyerName || 'Client',
+      product: data.product?.nom ? data.product : {
+        nom: data.productName || data.productNameSnapshot || 'Produit sans nom',
+        photos: data.productPhoto ? [data.productPhoto] : (data.productPhotoSnapshot ? [data.productPhotoSnapshot] : []),
+        categorie: data.productCategory || 'Catégorie',
+        unite: data.product?.unite || (data.quantityInfo ? '' : 'unité(s)')
+      },
+      displayQuantity: data.quantityDisplay || data.quantityInfo || `${data.quantity || 0}`
     }
   } catch (error) {
-    console.error('Error fetching order details:', error)
-    toast.error('Erreur lors du chargement des détails')
+    console.error('Error in details setup:', error)
+    toast.error('Erreur lors de l\'affichage des détails')
     orderDetails.value = props.order
   } finally {
     isLoading.value = false
@@ -87,6 +102,29 @@ const getStatus = (statusStr: string) => {
   return statusConfig[statusStr] || { label: statusStr, color: 'bg-muted', icon: Clock }
 }
 
+const canPay = computed(() => {
+    if (!orderDetails.value) return false
+    const status = orderDetails.value.orderStatus
+    return (props.order.fromScreen === 'my-personal-orders' || props.userRole === 'consumer') && status === 'EN_ATTENTE'
+})
+
+async function retryPayment() {
+    isPaying.value = true
+    try {
+        const paymentData = await walletStore.initiatePayment(orderDetails.value.id)
+        if (paymentData.success && paymentData.paymentUrl) {
+            toast.success('Redirection vers le paiement...')
+            window.location.href = paymentData.paymentUrl
+        } else {
+            toast.error('Impossible d\'initier le paiement pour le moment')
+        }
+    } catch (error) {
+        toast.error('Erreur lors de l\'initiation du paiement')
+    } finally {
+        isPaying.value = false
+    }
+}
+
 function getInitials(name: string) {
   if (!name) return '?'
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -110,8 +148,44 @@ function getInitials(name: string) {
     </div>
 
     <div v-else-if="orderDetails" class="p-6 space-y-6">
-      <!-- Order Status -->
-      <Card class="p-4">
+      <!-- Order Tracking Progress -->
+      <Card v-if="orderDetails.trackingSteps && orderDetails.trackingSteps.length > 0" class="p-5">
+        <h3 class="font-semibold mb-6 flex items-center gap-2">
+            <Clock class="w-4 h-4 text-primary" />
+            Suivi de la commande
+        </h3>
+        <div class="relative pl-8 space-y-8">
+            <!-- Vertical Line -->
+            <div class="absolute left-[15px] top-2 bottom-2 w-0.5 bg-muted"></div>
+            
+            <div v-for="(step, index) in orderDetails.trackingSteps" :key="index" class="relative">
+                <!-- Dot -->
+                <div :class="[
+                    'absolute -left-[25px] w-6 h-6 rounded-full border-4 flex items-center justify-center z-10 transition-all duration-300',
+                    step.completed ? 'bg-primary border-primary/20' : step.active ? 'bg-white border-primary shadow-[0_0_10px_rgba(var(--primary),0.3)] animate-pulse' : 'bg-white border-muted'
+                ]">
+                    <CheckCircle v-if="step.completed" class="w-2.5 h-2.5 text-white" />
+                    <div v-else-if="step.active" class="w-2 h-2 rounded-full bg-primary"></div>
+                    <div v-else class="w-2 h-2 rounded-full bg-muted"></div>
+                </div>
+                
+                <div class="flex flex-col">
+                    <span :class="['text-sm font-semibold', step.completed || step.active ? 'text-foreground' : 'text-muted-foreground']">
+                        {{ step.label }}
+                    </span>
+                    <span v-if="step.date" class="text-[10px] text-muted-foreground">
+                        {{ new Date(step.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) }}
+                    </span>
+                    <span v-else-if="step.completed || step.active" class="text-[10px] text-muted-foreground italic">
+                        {{ step.completed ? 'Étape terminée' : 'Étape actuelle' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+      </Card>
+
+      <!-- Fallback Status Card if no tracking steps -->
+      <Card v-else class="p-4">
         <div class="flex items-center justify-between mb-4">
           <div>
             <p class="font-semibold text-lg text-primary">{{ orderDetails.orderNumber || `CMD-${orderDetails.id.slice(0,8)}` }}</p>
@@ -121,21 +195,8 @@ function getInitials(name: string) {
           </div>
           <Badge :class="`${getStatus(orderDetails.orderStatus).color} text-white border-0 shadow-sm`">
             <component :is="getStatus(orderDetails.orderStatus).icon" class="w-3 h-3 mr-1" />
-            {{ getStatus(orderDetails.orderStatus).label }}
+            {{ orderDetails.paymentStatusLabel || getStatus(orderDetails.orderStatus).label }}
           </Badge>
-        </div>
-
-        <!-- Progress -->
-        <div class="pt-4 border-t border-dashed">
-            <div class="flex items-center gap-3">
-                <div :class="`w-8 h-8 rounded-full flex items-center justify-center ${getStatus(orderDetails.orderStatus).color} text-white shadow-lg`" :style="orderDetails.orderStatus !== 'DELIVERED' && orderDetails.orderStatus !== 'CANCELLED' ? 'animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;' : ''">
-                    <component :is="getStatus(orderDetails.orderStatus).icon" class="w-4 h-4" />
-                </div>
-                <div>
-                    <p class="font-medium text-sm">Statut actuel: {{ getStatus(orderDetails.orderStatus).label }}</p>
-                    <p class="text-xs text-muted-foreground">Dernière mise à jour: Aujourd'hui</p>
-                </div>
-            </div>
         </div>
       </Card>
 
@@ -160,7 +221,7 @@ function getInitials(name: string) {
               <div class="flex justify-between items-end">
                 <div class="text-sm">
                     <span class="text-muted-foreground">Quantité:</span>
-                    <span class="font-medium ml-1">{{ orderDetails.quantity }} {{ orderDetails.product?.unite || 'unité(s)' }}</span>
+                    <span class="font-medium ml-1">{{ orderDetails.displayQuantity }} {{ orderDetails.product?.unite || '' }}</span>
                 </div>
                 <p class="font-bold text-primary">{{ orderDetails.totalAmount?.toLocaleString() }} F</p>
               </div>
@@ -169,17 +230,34 @@ function getInitials(name: string) {
         </Card>
       </div>
 
-      <!-- Buyer Info -->
+      <!-- Delivery Info if available -->
+      <div v-if="orderDetails.deliveryAddress">
+        <h3 class="font-semibold mb-3 flex items-center gap-2">
+            <MapPin class="w-4 h-4 text-primary" />
+            Adresse de livraison
+        </h3>
+        <Card class="p-4 flex items-start gap-3">
+          <div class="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+            <MapPin class="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <p class="text-sm font-medium">{{ orderDetails.deliveryAddress }}</p>
+            <p class="text-xs text-muted-foreground mt-1">Côte d'Ivoire</p>
+          </div>
+        </Card>
+      </div>
+
+      <!-- Seller or Buyer Info -->
       <div>
         <h3 class="font-semibold mb-3 flex items-center gap-2">
             <CheckCircle class="w-4 h-4 text-primary" />
-            Informations client
+            Informations {{ order.fromScreen === 'my-personal-orders' ? 'vendeur' : 'client' }}
         </h3>
         <Card class="p-4">
           <div class="flex items-center gap-3">
-            <Avatar :fallback="getInitials(orderDetails.buyerName || 'Client')" class="w-12 h-12 border-2 border-primary/10" />
+            <Avatar :fallback="getInitials(order.fromScreen === 'my-personal-orders' ? (orderDetails.seller?.name || orderDetails.sellerName || 'Vendeur') : (orderDetails.buyerName || 'Client'))" class="w-12 h-12 border-2 border-primary/10" />
             <div class="flex-1">
-              <p class="font-bold text-gray-900">{{ orderDetails.buyerName || 'Client' }}</p>
+              <p class="font-bold text-gray-900">{{ order.fromScreen === 'my-personal-orders' ? (orderDetails.seller?.name || orderDetails.sellerName || 'Vendeur') : (orderDetails.buyerName || 'Client') }}</p>
               <div class="flex items-center gap-2 mt-1">
                 <MapPin class="w-3 h-3 text-muted-foreground" />
                 <span class="text-xs text-muted-foreground">Côte d'Ivoire</span>
@@ -226,11 +304,19 @@ function getInitials(name: string) {
       </Card>
 
       <!-- Actions -->
-      <div v-if="nextStatus || canCancel" class="flex gap-3 pt-4">
-        <Button v-if="canCancel" variant="outline" class="flex-1 h-12" :disabled="isUpdating" @click="updateStatus(props.userRole === 'processor' ? 'CANCELLED' : 'ANNULEE')">Annuler</Button>
-        <Button v-if="nextStatus" class="flex-1 bg-primary h-12 shadow-lg shadow-primary/20" :disabled="isUpdating" @click="updateStatus(nextStatus.id)">
-          <Loader2 v-if="isUpdating" class="w-4 h-4 mr-2 animate-spin" />
-          {{ nextStatus.label }}
+      <div v-if="nextStatus || canCancel || canPay" class="flex flex-col gap-3 pt-4">
+        <div class="flex gap-3 w-full">
+            <Button v-if="canCancel" variant="outline" class="flex-1 h-12" :disabled="isUpdating || isPaying" @click="updateStatus(props.userRole === 'processor' ? 'CANCELLED' : 'ANNULEE')">Annuler</Button>
+            <Button v-if="nextStatus" class="flex-1 bg-primary h-12 shadow-lg shadow-primary/20" :disabled="isUpdating || isPaying" @click="updateStatus(nextStatus.id)">
+                <Loader2 v-if="isUpdating" class="w-4 h-4 mr-2 animate-spin" />
+                {{ nextStatus.label }}
+            </Button>
+        </div>
+        
+        <Button v-if="canPay" class="w-full bg-secondary h-12 shadow-lg shadow-secondary/20 font-bold" :disabled="isPaying || isUpdating" @click="retryPayment">
+            <CreditCard v-if="!isPaying" class="w-5 h-5 mr-2" />
+            <Loader2 v-else class="w-5 h-5 mr-2 animate-spin" />
+            Payer maintenant
         </Button>
       </div>
     </div>
